@@ -248,8 +248,12 @@ function decide(sim: Sim, u: number) {
   const undead = (U.flags[u] & UF.Undead) !== 0;
   if (!undead && U.hunger[u] > 55) {
     if (city.stock[R.Food] >= 1) {
-      const [sx, sy] = civ.storageOf(sim, c, U.x[u], U.y[u]);
-      U.tx[u] = sx; U.ty[u] = sy; U.state[u] = St.Eat; return;
+      // eat at home if home is near, else at the nearest store
+      if (U.house[u] < 0 || !sim.buildings[U.house[u]]?.alive) U.house[u] = civ.findHome(sim, c);
+      const hb = U.house[u] >= 0 ? sim.buildings[U.house[u]] : null;
+      if (hb && hyp(hb.x - U.x[u], hb.y - U.y[u]) < 14) { U.tx[u] = hb.x + hb.w / 2; U.ty[u] = hb.y + hb.h + 0.2; }
+      else { const [sx, sy] = civ.storageOf(sim, c, U.x[u], U.y[u]); U.tx[u] = sx; U.ty[u] = sy; }
+      U.state[u] = St.Eat; return;
     }
     // famine: go find something to eat
     if (startForage(sim, u)) return;

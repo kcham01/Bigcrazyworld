@@ -3,9 +3,11 @@ import { App } from './ui/app';
 import { DEFAULT_GEN } from './sim/worldgen';
 import { DEFAULT_START } from './sim/setup';
 
-const app = new App();
+import { gallery } from './ui/gallery';
 const q = new URLSearchParams(location.search);
-if (q.get('seed')) {
+const app = q.get('gallery') ? null as unknown as App : new App();
+if (q.get('gallery')) { gallery(q.get('gallery')!); }
+else if (q.get('seed')) {
   const size = +(q.get('size') || 192);
   app.newWorld({ ...DEFAULT_GEN, w: size, h: size, seed: q.get('seed')!, shape: (q.get('shape') as any) || DEFAULT_GEN.shape }, { ...DEFAULT_START, races: (q.get('races') || DEFAULT_START.races.join(',')).split(',') });
   const sim = app.sim!;
@@ -25,6 +27,6 @@ if (q.get('seed')) {
 else app.titleScreen();
 
 // keep the world safe when the app goes to the background
-setInterval(() => { if (app.sim && app.speed) app.save(true); }, 180000);
-document.addEventListener('visibilitychange', () => { if (document.hidden && app.sim) app.save(true); });
-(window as any).__ready = true;
+setInterval(() => { if (app && app.sim && app.speed) app.save(true); }, 180000);
+document.addEventListener('visibilitychange', () => { if (document.hidden && app && app.sim) app.save(true); });
+if (!q.get('gallery')) (window as any).__ready = true;

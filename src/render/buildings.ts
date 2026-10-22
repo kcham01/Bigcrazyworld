@@ -7,7 +7,7 @@ import { hash2 } from '../sim/rng';
 
 export const STYLE_NAMES = ['human', 'elf', 'dwarf', 'orc', 'goblin', 'lizard', 'avian', 'undead', 'beast'];
 
-interface Pal { wall: RGBA; wallD: RGBA; roof: RGBA; roofD: RGBA; trim: RGBA; shape: 'gable' | 'cone' | 'dome' | 'flat' | 'spike' | 'mush' | 'nest'; win: RGBA }
+interface Pal { wall: RGBA; wallD: RGBA; roof: RGBA; roofD: RGBA; trim: RGBA; shape: 'gable' | 'cone' | 'dome' | 'flat' | 'spike' | 'mush' | 'nest' | 'hide'; win: RGBA }
 
 const LIGHT = EM(0xffd27a);
 function palette(style: number, era: number): Pal {
@@ -16,7 +16,7 @@ function palette(style: number, era: number): Pal {
   switch (STYLE_NAMES[style]) {
     case 'elf': return [g(0xb59a6a, 0x5f9e4a, 0x7a5a32, 'cone'), g(0xe6dcc4, 0x4f8f5a, 0x9a7a4a, 'cone'), g(0xf2ecdc, 0x3f8a6a, 0xc9a85a, 'dome'), g(0xf0f0ea, 0x4fa88a, 0xd8c070, 'dome'), g(0xe8f4f0, 0x6fd0b0, 0xa0e0d0, 'dome', EM(0xbaf7ff))][e];
     case 'dwarf': return [g(0x8a8278, 0x6b5a45, 0x5a4a3a, 'flat'), g(0x8f8a82, 0x5d5650, 0xb8892a, 'flat'), g(0x9a948c, 0x4a4a52, 0xd8a83a, 'gable'), g(0x8a4a3a, 0x3a3a40, 0xd8a83a, 'flat'), g(0x7d838c, 0x4a4a52, 0xf2c94c, 'flat')][e];
-    case 'orc': return [g(0x7a5a3a, 0x8a6a42, 0xe8e0c8, 'spike'), g(0x6b4a2b, 0x5e3c1f, 0xe8e0c8, 'spike'), g(0x5a5a5a, 0x3a2a22, 0xc43a2a, 'spike'), g(0x4a4a4a, 0x2b2b2b, 0xc43a2a, 'flat'), g(0x3d3d40, 0x2b2b2b, 0xe0453a, 'flat', EM(0xff8a5a))][e];
+    case 'orc': return [g(0x7a5a3a, 0x9a7a52, 0xe8e0c8, 'hide'), g(0x6b4a2b, 0x8a6a48, 0xe8e0c8, 'hide'), g(0x5a5a5a, 0x7a5a42, 0xc43a2a, 'hide'), g(0x4a4a4a, 0x2b2b2b, 0xc43a2a, 'flat'), g(0x3d3d40, 0x2b2b2b, 0xe0453a, 'flat', EM(0xff8a5a))][e];
     case 'goblin': return [g(0x7a6a3a, 0x9a8a4a, 0x5a3a22, 'cone'), g(0x8a6a3a, 0x6a7a3a, 0x5a3a22, 'gable'), g(0x7a6a5a, 0x5a6a3a, 0x8a5a2e, 'gable'), g(0x6a5a4a, 0x4a5a2a, 0xa8a8a8, 'flat'), g(0x5a6a4a, 0x3a4a2a, 0x9fffd0, 'flat', EM(0x9fffaa))][e];
     case 'lizard': return [g(0x8a7a52, 0x9a8a4a, 0x4f9a6a, 'dome'), g(0xa08a5a, 0x7a8a42, 0x4f9a6a, 'dome'), g(0xb8a070, 0x5a8a5a, 0x2fa06a, 'dome'), g(0xa89060, 0x4a6a4a, 0x2fa06a, 'flat'), g(0x9ab0a0, 0x3a6a5a, 0x6fffc0, 'dome', EM(0x9fffd0))][e];
     case 'avian': return [g(0x9a7a4a, 0xb89a5a, 0xe8e0c8, 'nest'), g(0xd8c8a0, 0xb07a4a, 0xf2f0e8, 'cone'), g(0xf2ecdc, 0x6a7ab8, 0xf2f0e8, 'cone'), g(0xe8e4dc, 0x5a6aa8, 0xf2f0e8, 'cone'), g(0xf4f6f8, 0x8aa8e8, 0xffffff, 'cone', EM(0xc8e8ff))][e];
@@ -26,74 +26,118 @@ function palette(style: number, era: number): Pal {
   }
 }
 
-/** a wall-and-roof block. x0,y0 = top-left of the sprite area for the footprint; fw = front wall height. */
-function block(p: Pix, x0: number, base: number, W: number, depth: number, fw: number, pal: Pal, opts: { door?: boolean; windows?: number; floors?: number; seed?: number; noRoof?: boolean } = {}) {
+/** a wall-and-roof block. x0 = left, base = bottom row of the footprint; fw = front wall height; depth = roof depth */
+function block(p: Pix, x0: number, base: number, W: number, depth: number, fw: number, pal: Pal, opts: { door?: boolean; windows?: number; floors?: number; seed?: number; noRoof?: boolean; era?: number; boxes?: boolean } = {}) {
   const wallTop = base - fw;
-  // front wall
+  const era = opts.era ?? 2, seed = opts.seed ?? 0;
+  const beam = shade(pal.wall, 0.55);
+  // front wall, textured by the age it was built in
   for (let y = wallTop; y < base; y++) for (let x = x0; x < x0 + W; x++) {
-    const brick = (y + (((x >> 1) + y) & 1)) % 3 === 0;
-    p.set(x, y, x === x0 + W - 1 ? pal.wallD : brick ? shade(pal.wall, 0.94) : pal.wall);
+    const lx = x - x0, ly = y - wallTop;
+    let c = pal.wall;
+    if (era <= 1) { if (lx % 3 === 2) c = shade(pal.wall, 0.86); }                                     // planks / mud
+    else if (era === 2) { if ((ly + ((lx >> 1) & 1)) % 3 === 0) c = shade(pal.wall, 0.93); }          // plaster
+    else if (era === 3) { if (ly % 2 === 1 || (lx + (ly >> 1) * 2) % 4 === 0) c = shade(pal.wall, 0.86); } // bricks
+    else { if (ly % 3 === 0) c = shade(pal.wall, 0.9); }                                              // concrete panels
+    if (lx === 0) c = shade(c, 1.08);
+    if (lx === W - 1) c = pal.wallD;
+    p.set(x, y, c);
   }
-  // windows
+  // half-timbering on old houses
+  if (era === 2 && W >= 8) { p.vline(x0, wallTop, base - 1, beam); p.vline(x0 + W - 1, wallTop, base - 1, shade(beam, 0.8)); if (fw >= 8) p.hline(x0, x0 + W - 1, wallTop + (fw >> 1) - 1, beam); }
+  // a shadow line under the eaves
+  p.hline(x0, x0 + W - 1, wallTop, shade(pal.wall, 0.7));
+  // windows with frames, sills and night glow
   const floors = opts.floors ?? 1;
-  const win = opts.windows ?? Math.max(1, Math.floor(W / 4));
+  const win = opts.windows ?? Math.max(1, Math.floor(W / 5));
+  const frame = era >= 4 ? rgb(0x9aa4b0) : rgb(0x4a321d);
   for (let f = 0; f < floors; f++) {
-    const wy = base - 3 - f * 4;
-    if (wy <= wallTop) break;
+    const wy = base - 4 - f * 5;
+    if (wy - 1 <= wallTop) break;
     for (let k = 0; k < win; k++) {
       const wx = x0 + Math.round((k + 0.5) * W / win) - 1;
-      if (opts.door && f === 0 && Math.abs(wx - (x0 + (W >> 1))) < 2) continue;
-      p.set(wx, wy, pal.win); p.set(wx + 1, wy, pal.win);
-      p.set(wx, wy - 1, shade(pal.win as RGBA, 1));
+      if (opts.door && f === 0 && Math.abs(wx - (x0 + (W >> 1) - 1)) < 3) continue;
+      p.hline(wx - 1, wx + 2, wy - 2, frame);
+      p.set(wx, wy - 1, pal.win); p.set(wx + 1, wy - 1, era >= 4 ? pal.win : shade(pal.win as RGBA, 0.8)); p.set(wx, wy, shade(pal.win as RGBA, 0.75)); p.set(wx + 1, wy, pal.win);
+      p.hline(wx - 1, wx + 2, wy + 1, era >= 3 ? rgb(0xd8d2c8) : rgb(0x8a6a42));
+      if (opts.boxes && f === 0 && hash2(seed, k, 3) < 0.6) { p.set(wx, wy + 2, rgb(0xe0453a)); p.set(wx + 1, wy + 2, rgb(0x6fbf4a)); }
     }
   }
   if (opts.door) {
     const dx = x0 + (W >> 1) - 1;
-    p.rect(dx, base - 3, 2, 3, rgb(0x3a2616)); p.set(dx + 1, base - 2, rgb(0xb8892a));
+    p.rect(dx - 1, base - 5, 4, 1, frame);
+    p.rect(dx, base - 4, 2, 4, rgb(0x3a2616)); p.set(dx, base - 4, rgb(0x5a3a22)); p.set(dx + 1, base - 2, rgb(0xd8a83a));
+    p.hline(dx - 1, dx + 2, base, rgb(0x8a8278));
   }
   if (opts.noRoof) return;
-  roof(p, x0, wallTop, W, depth, pal);
+  roof(p, x0, wallTop, W, depth, pal, seed);
 }
 
-function roof(p: Pix, x0: number, wallTop: number, W: number, depth: number, pal: Pal) {
-  const r = pal.roof, rd = pal.roofD;
+function roof(p: Pix, x0: number, wallTop: number, W: number, depth: number, pal: Pal, seed = 0) {
+  const r = pal.roof, rd = pal.roofD, rl = shade(r, 1.18);
   const top = wallTop - depth;
   switch (pal.shape) {
-    case 'flat':
-      for (let y = top; y < wallTop; y++) for (let x = x0; x < x0 + W; x++) p.set(x, y, y === top ? shade(r, 1.15) : x === x0 + W - 1 ? rd : r);
+    case 'flat': {
+      for (let y = top; y < wallTop; y++) for (let x = x0; x < x0 + W; x++) p.set(x, y, x === x0 + W - 1 ? rd : (x + y) % 5 === 0 ? shade(r, 0.95) : r);
+      p.hline(x0, x0 + W - 1, top, rl); p.vline(x0, top, wallTop - 1, rl);
       p.hline(x0, x0 + W - 1, wallTop - 1, rd);
+      // something on the roof: a vent, a water tank or a little garden
+      const k = Math.floor(hash2(seed, 5, 9) * 3);
+      if (k === 0 && W >= 8) p.rect(x0 + 2, top + 2, 2, 2, shade(r, 0.7));
+      if (k === 1 && W >= 10) { p.rect(x0 + W - 5, top + 1, 3, 3, rgb(0x8a8a90)); p.hline(x0 + W - 5, x0 + W - 3, top + 1, rgb(0xb0b0b8)); }
       break;
+    }
     case 'gable': {
-      // ridge across the width, slopes toward and away from us
-      const mid = top + Math.floor(depth * 0.45);
-      for (let y = top - 2; y < wallTop; y++) for (let x = x0 - 1; x < x0 + W + 1; x++) {
-        const rows = y < mid ? (y - (top - 2)) : 99;
-        if (y < mid && rows < 0) continue;
-        const c = y < mid ? rd : (y - mid) % 2 === 0 ? r : shade(r, 0.9);
-        p.set(x, y, c);
+      // the near slope of a pitched roof seen from above-front, tiles in rows, eaves overhanging
+      const L = x0 - 1, R = x0 + W;
+      const ridge = top - 1;
+      for (let y = ridge; y < wallTop; y++) {
+        const row = y - ridge;
+        for (let x = L; x <= R; x++) {
+          let c = row === 0 ? rl : row % 2 === 0 ? r : shade(r, 0.9);
+          if (row > 0 && (x + (row >> 1) * 2) % 4 === 0) c = shade(c, 0.85);   // tile seams
+          if (x === L || x === R) c = rd;                                      // gable ends
+          if (y === wallTop - 1) c = rd;                                       // eaves
+          p.set(x, y, c);
+        }
       }
-      p.hline(x0 - 1, x0 + W, top - 2, shade(r, 1.2));
-      p.hline(x0 - 1, x0 + W, wallTop - 1, rd);
       break;
     }
     case 'cone': {
       const cx = x0 + W / 2, h = depth + 4;
       for (let y = 0; y < h; y++) {
         const hw = Math.max(0.5, (W / 2 + 1) * (y + 1) / h);
-        for (let x = Math.floor(cx - hw); x < Math.ceil(cx + hw); x++) p.set(x, wallTop - h + y, x > cx + hw * 0.4 ? rd : (x + y) % 3 === 0 ? shade(r, 0.9) : r);
+        for (let x = Math.floor(cx - hw); x < Math.ceil(cx + hw); x++) p.set(x, wallTop - h + y, x > cx + hw * 0.4 ? rd : (y % 3 === 0 ? shade(r, 0.88) : (x + y) % 4 === 0 ? rl : r));
       }
+      p.set(Math.floor(cx), wallTop - h - 1, pal.trim);
       break;
     }
     case 'dome': {
-      const cx = x0 + W / 2 - 0.5, ry = depth * 0.9 + 1;
+      const cx = x0 + W / 2 - 0.5, ry = Math.min(depth * 0.9 + 1, W * 0.55);
       p.ellipse(cx + 0.5, wallTop, W / 2 + 0.5, ry, r);
-      for (let y = Math.floor(wallTop - ry); y <= wallTop; y++) for (let x = x0; x < x0 + W; x++) if (p.get(x, y) && x > cx + W * 0.2) p.set(x, y, rd);
-      p.set(Math.round(cx), Math.floor(wallTop - ry) - 1, pal.trim);
+      for (let y = Math.floor(wallTop - ry); y <= wallTop; y++) for (let x = x0; x < x0 + W; x++) { if (!p.get(x, y)) continue; if (x > cx + W * 0.22) p.set(x, y, rd); else if (x < cx - W * 0.15 && y < wallTop - ry * 0.4) p.set(x, y, rl); }
+      p.vline(Math.round(cx), Math.floor(wallTop - ry) - 2, Math.floor(wallTop - ry) - 1, pal.trim);
       break;
     }
     case 'spike': {
-      for (let y = top; y < wallTop; y++) for (let x = x0; x < x0 + W; x++) p.set(x, y, x === x0 + W - 1 ? rd : r);
-      for (let x = x0; x < x0 + W; x += 2) { p.set(x, top - 1, pal.trim); p.set(x, top - 2, pal.trim); }
+      // hide-and-timber roof with stakes along the top
+      for (let y = top; y < wallTop; y++) for (let x = x0; x < x0 + W; x++) p.set(x, y, x === x0 + W - 1 ? rd : (y - top) % 3 === 0 ? shade(r, 0.85) : (x % 4 === 1 ? rl : r));
+      for (let x = x0; x < x0 + W; x += 3) { p.vline(x, top - 3, top - 1, rgb(0x6b4a2b)); p.set(x, top - 4, pal.trim); }
+      break;
+    }
+    case 'hide': {
+      // a big hide yurt: stitched skins over a frame, tusks and a skull on top
+      const cx = x0 + W / 2 - 0.5, ry = Math.min(depth + 3, W * 0.62);
+      p.ellipse(cx + 0.5, wallTop + 1, W / 2 + 1, ry, r);
+      for (let y = Math.floor(wallTop - ry); y <= wallTop; y++) for (let x = x0 - 1; x <= x0 + W; x++) {
+        if (!p.get(x, y)) continue;
+        if ((y - wallTop) % 3 === 0) p.set(x, y, shade(r, 0.82));
+        else if (x > cx + W * 0.25) p.set(x, y, rd);
+        else if ((x * 7 + y * 3) % 11 === 0) p.set(x, y, rl);
+      }
+      const ty = Math.floor(wallTop - ry);
+      p.line(cx - 2, ty + 2, cx - 4, ty - 2, rgb(0xe8e0c8)); p.line(cx + 3, ty + 2, cx + 5, ty - 2, rgb(0xe8e0c8));
+      p.rect(Math.round(cx), ty - 1, 2, 2, rgb(0xe8e0c8)); p.set(Math.round(cx), ty, rgb(0x1a1210));
       break;
     }
     case 'mush': {
@@ -130,8 +174,12 @@ export function paintBuilding(type: string, style: number, era: number, w: numbe
   const pad = 3;
   const p = new Pix(W + pad * 2, D + rise + pad * 2);
   const x0 = pad, base = pad + rise + D;   // base = bottom of footprint
-  const pal = palette(style, era);
+  const pal0 = palette(style, era);
   const st = STYLE_NAMES[style];
+  // neighbours don't all have the same roof
+  const v = hash2(seed, 1, 5);
+  const pal: Pal = { ...pal0, roof: shade(pal0.roof, 0.85 + v * 0.3), roofD: shade(pal0.roofD, 0.85 + v * 0.3) };
+  if (st === 'human' && era >= 1 && era <= 3 && hash2(seed, 2, 5) < 0.3) { pal.roof = rgb(0x5a6270); pal.roofD = rgb(0x3a4048); }
   const rnd = (k: number) => hash2(seed, k, 77);
   const ground = (c: RGBA) => p.rect(x0, base - D + 2, W, D - 2, c);
   const e = Math.min(4, era);
@@ -144,7 +192,7 @@ export function paintBuilding(type: string, style: number, era: number, w: numbe
         p.set(x0 + W - 3, base - 4, EM(0xffb02a)); p.set(x0 + W - 4, base - 3, EM(0xff6a1a)); p.set(x0 + W - 2, base - 3, EM(0xff8a2a)); p.set(x0 + W - 3, base - 5, EM(0xffe07a));
         flag(p, x0 + W - 2, base - D - 4, 8);
       } else {
-        block(p, x0, base, W, D - 4, 8 + (e >= 3 ? 4 : 0), pal, { door: true, windows: 3, floors: e >= 3 ? 2 : 1 });
+        block(p, x0, base, W, D - 4, 8 + (e >= 3 ? 4 : 0), pal, { era: e, seed, door: true, windows: 3, floors: e >= 3 ? 2 : 1 });
         flag(p, x0 + (W >> 1) - 1, base - 8 - D - (e >= 3 ? 8 : 4) - 2, 6);
         if (e >= 2) { p.rect(x0 + (W >> 1) - 2, base - 12 - D + 2, 4, 3, pal.wall); p.set(x0 + (W >> 1) - 1, base - 11 - D + 2, rgb(0xf4f1ea)); }
       }
@@ -153,17 +201,27 @@ export function paintBuilding(type: string, style: number, era: number, w: numbe
     case 'tent': tent(p, x0, base, W, 7, pal); break;
     case 'hut':
       if (st === 'avian') { nestHut(p, x0, base, W, D, pal); break; }
-      block(p, x0 + 1, base, W - 2, D - 6, 5, { ...pal, shape: e === 0 ? (pal.shape === 'flat' ? 'cone' : pal.shape) : pal.shape }, { door: true, windows: 1 });
+      block(p, x0 + 1, base, W - 2, D - 6, 5, { ...pal, shape: e === 0 ? (pal.shape === 'flat' ? 'cone' : pal.shape) : pal.shape }, { era: e, seed, door: true, windows: 1 });
       if (rnd(1) < 0.5) p.rect(x0 + W - 3, base - 3, 2, 2, rgb(0x8a5a2e));   // firewood
       break;
-    case 'house':
-      block(p, x0, base, W, D - 5, 7, pal, { door: true, windows: 2 });
-      if (e >= 2 && rnd(2) < 0.6) chimney(p, x0 + W - 4, base - 7 - (D - 5) - 1);
+    case 'house': {
+      const tall = rnd(4) < 0.35 && e >= 2;
+      const fw = tall ? 11 : 8;
+      block(p, x0, base, W, D - 6, fw, pal, { era: e, seed, door: true, windows: 2, floors: tall ? 2 : 1, boxes: e >= 2 && st !== 'orc' && st !== 'undead' });
+      if (e >= 2 && rnd(2) < 0.7) chimney(p, x0 + (rnd(6) < 0.5 ? 2 : W - 4), base - fw - (D - 6) - 2);
+      if (rnd(7) < 0.4 && e >= 1) { p.rect(x0 + W - 2, base - 2, 2, 2, rgb(0x8a5a2e)); p.set(x0 + W - 2, base - 3, rgb(0x6b4a2b)); }   // barrel
       break;
-    case 'manor':
-      block(p, x0, base, W, D - 3, 10, pal, { door: true, windows: 4, floors: 2 });
-      flag(p, x0 + 2, base - 10 - D - 4, 5);
+    }
+    case 'manor': {
+      block(p, x0, base, W, D - 5, 12, pal, { era: e, seed, door: true, windows: 4, floors: 2, boxes: true });
+      // dormers in the roof
+      const rt = base - 12 - (D - 5);
+      for (const dx of [4, W - 6]) { p.rect(x0 + dx, rt + 2, 3, 3, pal.wall); p.set(x0 + dx + 1, rt + 3, pal.win); p.hline(x0 + dx - 1, x0 + dx + 3, rt + 1, pal.roofD); }
+      flag(p, x0 + (W >> 1), rt - 6, 5);
+      // a little garden hedge
+      for (let x = x0; x < x0 + W; x += 2) p.set(x, base + 1, rgb(0x3f8a33));
       break;
+    }
     case 'highrise': {
       const floors = 6 + Math.floor(rnd(3) * 5);
       const glass = e >= 4;
@@ -176,7 +234,7 @@ export function paintBuilding(type: string, style: number, era: number, w: numbe
       return { pix: crop(p, scaffold), ax: x0, ay: base - D };
     }
     case 'granary': {
-      if (st === 'dwarf' || e >= 3) { block(p, x0, base, W, D - 4, 8, pal, { door: true, windows: 0 }); break; }
+      if (st === 'dwarf' || e >= 3) { block(p, x0, base, W, D - 4, 8, pal, { era: e, seed, door: true, windows: 0 }); break; }
       // round silo with a conical roof
       const cx = x0 + W / 2;
       for (let y = base - 9; y < base; y++) for (let x = x0 + 2; x < x0 + W - 2; x++) p.set(x, y, x > cx + 2 ? pal.wallD : (y % 3 === 0 ? shade(pal.wall, 0.9) : pal.wall));
@@ -185,10 +243,10 @@ export function paintBuilding(type: string, style: number, era: number, w: numbe
       p.rect(x0, base - 3, 2, 3, rgb(0xd8b84a)); p.rect(x0 + W - 2, base - 2, 2, 2, rgb(0xd8b84a));
       break;
     }
-    case 'warehouse': block(p, x0, base, W, D - 4, 8, { ...pal, shape: e >= 3 ? 'flat' : 'gable' }, { door: true, windows: 1 }); p.rect(x0 + 1, base - 3, 3, 3, rgb(0x9a6a3a)); break;
+    case 'warehouse': block(p, x0, base, W, D - 4, 8, { ...pal, shape: e >= 3 ? 'flat' : 'gable' }, { era: e, seed, door: true, windows: 1 }); p.rect(x0 + 1, base - 3, 3, 3, rgb(0x9a6a3a)); break;
     case 'barn': {
       const red = { ...pal, wall: rgb(0xa8402e), wallD: rgb(0x7a2e22), roof: rgb(0x5a4a3a), roofD: rgb(0x3a3028), shape: 'gable' as const };
-      block(p, x0, base, W, D - 5, 7, st === 'human' || st === 'beast' ? red : pal, { door: true, windows: 0 });
+      block(p, x0, base, W, D - 5, 7, st === 'human' || st === 'beast' ? red : pal, { era: e, seed, door: true, windows: 0 });
       p.line(x0 + (W >> 1) - 2, base - 6, x0 + (W >> 1) + 1, base - 3, rgb(0xf4f1ea));
       break;
     }
@@ -207,31 +265,43 @@ export function paintBuilding(type: string, style: number, era: number, w: numbe
       break;
     }
     case 'smithy':
-      block(p, x0, base, W, D - 5, 7, pal, { door: true, windows: 1 });
+      block(p, x0, base, W, D - 5, 7, pal, { era: e, seed, door: true, windows: 1 });
       chimney(p, x0 + W - 4, base - 7 - (D - 5) - 2, true);
       p.rect(x0 + W - 4, base - 2, 3, 1, rgb(0x3a3a40)); p.set(x0 + W - 3, base - 3, rgb(0x3a3a40));
       break;
     case 'barracks':
-      block(p, x0, base, W, D - 4, 8, { ...pal, shape: pal.shape === 'cone' || pal.shape === 'dome' ? 'gable' : pal.shape }, { door: true, windows: 3 });
-      flag(p, x0 + 1, base - 8 - D, 6); flag(p, x0 + W - 4, base - 8 - D, 6);
+      block(p, x0 + 4, base, W - 4, D - 4, 8, { ...pal, shape: pal.shape === 'cone' || pal.shape === 'dome' ? 'gable' : pal.shape }, { era: e, seed, door: true, windows: 2 });
+      flag(p, x0 + 5, base - 8 - D, 6); flag(p, x0 + W - 4, base - 8 - D, 6);
+      // a yard with a training dummy and a weapon rack
+      p.vline(x0 + 1, base - 6, base - 1, rgb(0x8a5a2e)); p.hline(x0, x0 + 2, base - 5, rgb(0x8a5a2e)); p.rect(x0, base - 8, 3, 2, rgb(0xd8c9a0));
+      p.vline(x0 + 3, base - 4, base - 1, rgb(0x6b4a2b)); p.set(x0 + 3, base - 5, rgb(0xc9cdd3));
       break;
     case 'stable':
-      block(p, x0 + 6, base, W - 6, D - 5, 6, pal, { door: true, windows: 0 });
+      block(p, x0 + 6, base, W - 6, D - 5, 6, pal, { era: e, seed, door: true, windows: 0 });
       for (let x = x0; x < x0 + 7; x += 2) p.vline(x, base - 4, base - 1, rgb(0x6b4a2b));
       p.hline(x0, x0 + 6, base - 3, rgb(0x8a5a2e));
       p.rect(x0 + 2, base - 4, 3, 2, rgb(0x7a4f2e)); p.set(x0 + 5, base - 5, rgb(0x7a4f2e));
       break;
     case 'temple': {
-      // columns and a pediment (or a ziggurat for some)
       if (st === 'lizard' || st === 'goblin' || (st === 'human' && e === 1)) { ziggurat(p, x0, base, W, D + rise - 2, pal); break; }
-      const top = base - 10;
-      p.rect(x0, top - 2, W, 2, pal.wall);
-      for (let x = x0 + 1; x < x0 + W - 1; x += 3) p.vline(x, top, base - 1, shade(pal.wall, 1.1));
-      p.rect(x0 + (W >> 1) - 1, base - 4, 2, 4, EM(0xffd27a));
-      roof(p, x0, top - 2, W, D - 4, { ...pal, shape: st === 'elf' || e >= 2 ? 'dome' : 'gable' });
+      const stone = e >= 3 ? rgb(0xe8e4dc) : shade(pal.wall, 1.05);
+      // steps, columns, pediment, and a dome behind
+      p.hline(x0 - 1, x0 + W, base, shade(stone, 0.8)); p.hline(x0, x0 + W - 1, base - 1, shade(stone, 0.9));
+      const ct = base - 10;
+      p.rect(x0 + 1, ct, W - 2, 9, shade(stone, 0.7));
+      for (let x = x0 + 1; x < x0 + W - 1; x += 2) p.vline(x, ct, base - 2, stone);
+      p.rect(x0 + (W >> 1) - 1, base - 5, 2, 4, EM(0xffd27a));
+      for (let y = 0; y < 4; y++) p.hline(x0 + y, x0 + W - 1 - y, ct - 1 - y, y === 0 ? shade(stone, 0.85) : stone);
+      p.set(x0 + (W >> 1), ct - 3, pal.trim);
+      roof(p, x0 + 2, ct - 4, W - 4, D - 6, { ...pal, roof: e >= 2 ? rgb(0xe8c050) : pal.roof, roofD: e >= 2 ? rgb(0xb8892a) : pal.roofD, shape: st === 'orc' || st === 'undead' ? 'spike' : 'dome' }, seed);
       break;
     }
-    case 'library': block(p, x0, base, W, D - 5, 8, pal, { door: true, windows: 2, floors: 1 }); p.rect(x0 + 1, base - 8, 3, 2, rgb(0x8a2a2a)); break;
+    case 'library': {
+      block(p, x0, base, W, D - 5, 10, { ...pal, shape: e >= 2 ? 'dome' : pal.shape }, { era: e, seed, door: true, windows: 0 });
+      for (let x = x0 + 1; x < x0 + W - 1; x += 3) p.vline(x, base - 9, base - 1, shade(pal.wall, 1.15));    // columns
+      p.rect(x0 + 2, base - 12, 4, 2, rgb(0x8a2a2a)); p.set(x0 + 3, base - 12, rgb(0xf0ebdc));            // the sign: a book
+      break;
+    }
     case 'market': {
       // stalls with striped awnings in the owner colour
       for (let k = 0; k < 3; k++) {
@@ -245,9 +315,10 @@ export function paintBuilding(type: string, style: number, era: number, w: numbe
       break;
     }
     case 'tavern':
-      block(p, x0, base, W, D - 5, 8, pal, { door: true, windows: 2, floors: 1 });
-      p.hline(x0 + W - 1, x0 + W + 1, base - 7, rgb(0x6b4a2b)); p.rect(x0 + W, base - 6, 2, 2, rgb(0xd8a83a));
-      chimney(p, x0 + 2, base - 8 - (D - 5) - 2);
+      block(p, x0, base, W, D - 5, 9, pal, { era: e, seed, door: true, windows: 2, floors: 1 });
+      p.hline(x0 + W - 1, x0 + W + 1, base - 8, rgb(0x6b4a2b)); p.rect(x0 + W, base - 7, 3, 3, rgb(0xd8a83a)); p.set(x0 + W + 1, base - 6, rgb(0x8a5a2e));   // a sign: a mug
+      chimney(p, x0 + 2, base - 9 - (D - 5) - 2, true);
+      p.rect(x0, base - 2, 2, 2, rgb(0x8a5a2e)); p.rect(x0 + 2, base - 2, 2, 2, rgb(0x7a4f2e)); p.set(x0 + 1, base - 3, rgb(0x6b4a2b));   // barrels
       break;
     case 'dock':
       for (let x = x0; x < x0 + W; x++) for (let y = base - D + 3; y < base; y++) p.set(x, y, (x + y) % 2 ? rgb(0x8a5a2e) : rgb(0x7a4f2e));
@@ -283,9 +354,13 @@ export function paintBuilding(type: string, style: number, era: number, w: numbe
       break;
     }
     case 'palace': {
-      block(p, x0, base, W, D - 6, 12, { ...pal, roof: rgb(0xe8c050), roofD: rgb(0xb8892a), shape: st === 'elf' || st === 'human' ? 'dome' : pal.shape }, { door: true, windows: 4, floors: 2 });
-      flag(p, x0 + 1, base - 12 - D, 5); flag(p, x0 + W - 4, base - 12 - D, 5);
-      p.rect(x0 + (W >> 1) - 1, base - 5, 2, 1, rgb(0xf2c94c));
+      const gold = { ...pal, roof: rgb(0xe8c050), roofD: rgb(0xb8892a) };
+      block(p, x0 + 4, base, W - 8, D - 6, 13, { ...gold, shape: st === 'orc' || st === 'undead' ? 'spike' : 'dome' }, { era: e, seed, door: true, windows: 2, floors: 2 });
+      for (const tx of [x0, x0 + W - 5]) {
+        block(p, tx, base, 5, 4, 18, { ...gold, shape: 'cone' }, { era: e, seed, windows: 1, floors: 3 });
+        flag(p, tx + 2, base - 18 - 4 - 9, 4);
+      }
+      p.rect(x0 + (W >> 1) - 1, base - 1, 2, 1, rgb(0xb8282e));   // a red carpet
       break;
     }
     case 'monument': {
@@ -312,15 +387,15 @@ export function paintBuilding(type: string, style: number, era: number, w: numbe
       break;
     }
     case 'academy': {
-      block(p, x0, base, W, D - 4, 8, pal, { door: true, windows: 3 });
+      block(p, x0, base, W, D - 4, 8, pal, { era: e, seed, door: true, windows: 3 });
       p.rect(x0 + W - 7, base - 26, 5, 18, shade(pal.wall, 0.95)); roof(p, x0 + W - 7, base - 26, 5, 5, { ...pal, roof: rgb(0x5a43b8), roofD: rgb(0x3b2a7a), shape: 'cone' });
       p.set(x0 + W - 5, base - 35, EM(0x8fe8ff)); p.set(x0 + W - 5, base - 20, EM(0xb06fff));
       break;
     }
-    case 'hospital': block(p, x0, base, W, D - 4, 9, { ...pal, shape: e >= 3 ? 'flat' : pal.shape }, { door: true, windows: 4, floors: 2 }); p.rect(x0 + 2, base - 9 - D + 6, 3, 1, rgb(0xe0453a)); p.rect(x0 + 3, base - 10 - D + 6, 1, 3, rgb(0xe0453a)); break;
-    case 'university': block(p, x0, base, W, D - 4, 12, { ...pal, shape: 'dome' }, { door: true, windows: 5, floors: 2 }); flag(p, x0 + 2, base - 12 - D - 2, 5); break;
+    case 'hospital': block(p, x0, base, W, D - 4, 9, { ...pal, shape: e >= 3 ? 'flat' : pal.shape }, { era: e, seed, door: true, windows: 4, floors: 2 }); p.rect(x0 + 2, base - 9 - D + 6, 3, 1, rgb(0xe0453a)); p.rect(x0 + 3, base - 10 - D + 6, 1, 3, rgb(0xe0453a)); break;
+    case 'university': block(p, x0, base, W, D - 4, 12, { ...pal, shape: 'dome' }, { era: e, seed, door: true, windows: 5, floors: 2 }); flag(p, x0 + 2, base - 12 - D - 2, 5); break;
     case 'factory': {
-      block(p, x0, base, W, D - 6, 9, { ...pal, wall: rgb(0x9a4a3a), wallD: rgb(0x6a3028), roof: rgb(0x5a5a62), roofD: rgb(0x3a3a40), shape: 'flat' }, { door: true, windows: 4 });
+      block(p, x0, base, W, D - 6, 9, { ...pal, wall: rgb(0x9a4a3a), wallD: rgb(0x6a3028), roof: rgb(0x5a5a62), roofD: rgb(0x3a3a40), shape: 'flat' }, { era: e, seed, door: true, windows: 4 });
       for (let k = 0; k < 2; k++) { const sx = x0 + 3 + k * 8; p.rect(sx, base - 26, 3, 14, rgb(0x6a3028)); p.hline(sx, sx + 2, base - 26, rgb(0x3a3a40)); }
       // saw-tooth roof
       for (let x = x0; x < x0 + W; x++) p.set(x, base - 9 - (D - 6) - (x % 4), rgb(0x5a5a62));
@@ -373,7 +448,7 @@ export function paintBuilding(type: string, style: number, era: number, w: numbe
       break;
     }
     default:
-      block(p, x0, base, W, D - 4, 7, pal, { door: true });
+      block(p, x0, base, W, D - 4, 7, pal, { era: e, seed, door: true });
   }
   p.outline(OUT);
   // ground shadow on the right

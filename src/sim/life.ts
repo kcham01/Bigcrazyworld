@@ -203,7 +203,7 @@ function roomToBreed(sim: Sim, u: number): boolean {
   const U = sim.units;
   const animals = U.count - sim.peopleCount;
   if (animals > sim.laws.maxUnits * 0.45) return false;
-  if (sim.subs[U.sub[u]].pop > sim.laws.maxUnits * (SPECIES[U.spec[u]].kind === 'sea' ? 0.06 : 0.08)) return false;
+  if (sim.subs[U.sub[u]].pop > sim.laws.maxUnits * (SPECIES[U.spec[u]].kind === 'sea' ? 0.06 : SPECIES[U.spec[u]].fly ? 0.012 : 0.08)) return false;
   let n = 0;
   U.near(U.x[u], U.y[u], 7, (j) => { if (U.spec[j] === U.spec[u]) n++; return n > 14; });
   return n <= 14;

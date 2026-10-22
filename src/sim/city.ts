@@ -58,8 +58,8 @@ export function storageOf(sim: Sim, c: number, x: number, y: number): [number, n
 export function findHome(sim: Sim, c: number): number {
   const city = sim.cities[c];
   const homes: number[] = [];
-  for (const b of city.buildings) { const bd = sim.buildings[b]; if (bd.alive && bd.built >= 1 && BUILDINGS[bd.type].housing) homes.push(b); }
-  if (!homes.length) return -1;
+  for (const b of city.buildings) { const bd = sim.buildings[b]; if (bd.alive && bd.built >= 1 && BUILDINGS[bd.type].housing && bd.type !== BT.Hearth) homes.push(b); }
+  if (!homes.length) { for (const b of city.buildings) if (sim.buildings[b].type === BT.Hearth && sim.buildings[b].alive) return b; return -1; }
   return homes[sim.rng.int(homes.length)];
 }
 

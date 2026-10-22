@@ -13,8 +13,8 @@ const b = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-un
 const p = await b.newPage({ viewport: { width: +w, height: +h } });
 const logs = [];
 p.on('console', m => logs.push(m.type() + ': ' + m.text())); p.on('pageerror', e => logs.push('ERROR: ' + e.message));
-await p.goto(`http://127.0.0.1:${port}/?${q}`);
-try { await p.waitForFunction(wait, null, { timeout: 120000 }); } catch (e) { logs.push('timeout waiting for ' + wait); }
+await p.goto(`http://127.0.0.1:${port}/?${q}`, { timeout: 600000 });
+try { await p.waitForFunction(wait, null, { timeout: 600000 }); } catch (e) { logs.push('timeout waiting for ' + wait); }
 await p.waitForTimeout(600);
 await p.screenshot({ path: out });
 if (logs.length) console.log(logs.slice(0, 30).join('\n'));

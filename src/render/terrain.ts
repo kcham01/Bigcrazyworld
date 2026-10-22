@@ -108,19 +108,18 @@ void main() {
   int road = int(info.b * 255.0 + 0.5) >> 4;
   if (road > 0 && !w) {
     ivec2 cc = ivec2(sp);
-    bool on = cc.x >= 3 && cc.x <= 4 && cc.y >= 3 && cc.y <= 4;
-    if ((int(infoAt(src + ivec2(1,0)).b*255.0+0.5) >> 4) > 0 && cc.y >= 3 && cc.y <= 4 && cc.x >= 3) on = true;
-    if ((int(infoAt(src + ivec2(-1,0)).b*255.0+0.5) >> 4) > 0 && cc.y >= 3 && cc.y <= 4 && cc.x <= 4) on = true;
-    if ((int(infoAt(src + ivec2(0,1)).b*255.0+0.5) >> 4) > 0 && cc.x >= 3 && cc.x <= 4 && cc.y >= 3) on = true;
-    if ((int(infoAt(src + ivec2(0,-1)).b*255.0+0.5) >> 4) > 0 && cc.x >= 3 && cc.x <= 4 && cc.y <= 4) on = true;
-    if (road >= 3 && (cc.x == 2 || cc.x == 5 || cc.y == 2 || cc.y == 5) && hn < 0.5) on = on || false;
+    int lo = road >= 2 ? 2 : 3, hi = road >= 2 ? 5 : 4;
+    bool inX = cc.x >= lo && cc.x <= hi, inY = cc.y >= lo && cc.y <= hi;
+    bool on = inX && inY;
+    if ((int(infoAt(src + ivec2(1,0)).b*255.0+0.5) >> 4) > 0 && inY && cc.x >= lo) on = true;
+    if ((int(infoAt(src + ivec2(-1,0)).b*255.0+0.5) >> 4) > 0 && inY && cc.x <= hi) on = true;
+    if ((int(infoAt(src + ivec2(0,1)).b*255.0+0.5) >> 4) > 0 && inX && cc.y >= lo) on = true;
+    if ((int(infoAt(src + ivec2(0,-1)).b*255.0+0.5) >> 4) > 0 && inX && cc.y <= hi) on = true;
     if (on) {
-      vec3 rc = road == 1 ? vec3(0.62, 0.5, 0.33) : road == 2 ? vec3(0.58, 0.55, 0.5) : road == 3 ? vec3(0.5, 0.5, 0.52) : vec3(0.22, 0.22, 0.24);
-      c = rc * (0.9 + 0.15 * hn);
-      if (road == 4 && cc.x == 3 && mod(sp.y, 3.0) < 1.0) c = vec3(0.9, 0.85, 0.4);
-    } else if (rv) {
-      // bridge planks over the river
-      c = mix(c, vec3(0.5, 0.36, 0.22), 0.0);
+      vec3 rc = road == 1 ? vec3(0.66, 0.54, 0.36) : road == 2 ? vec3(0.62, 0.58, 0.5) : road == 3 ? vec3(0.56, 0.56, 0.58) : vec3(0.24, 0.24, 0.26);
+      c = rc * (0.88 + 0.16 * hn);
+      if (road == 3 && mod(gp.x + gp.y * 2.0, 3.0) < 1.0) c *= 0.88;     // cobbles
+      if (road == 4 && (cc.x == 3 || cc.y == 3) && mod(gp.x + gp.y, 4.0) < 2.0) c = vec3(0.9, 0.85, 0.4);
     }
   }
   if (road > 0 && rv) {
