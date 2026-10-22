@@ -154,6 +154,7 @@ export function findGame(sim: Sim, u: number, r: number): number {
   U.near(U.x[u], U.y[u], r, (j) => {
     const d = SPECIES[U.spec[j]];
     if (!d.prey || d.sapient || (U.flags[j] & UF.Tame)) return;
+    if (sim.subs[U.sub[j]].pop < 24) return;       // leave rare beasts alone
     if (d.kind === 'sea' && !(sim.world.walkable(sim.world.tileAt(U.x[j], U.y[j])))) return;
     const dd = (U.x[j] - U.x[u]) ** 2 + (U.y[j] - U.y[u]) ** 2;
     if (dd < bd) { bd = dd; best = j; }
@@ -917,14 +918,14 @@ function births(sim: Sim, city: City) {
   if (d.noBreed || !d.breed) return;
   if (U.count >= sim.laws.maxUnits) return;
   const foodPer = city.stock[R.Food] / Math.max(1, city.pop);
-  if (foodPer < 0.4 || city.famine > 3) return;
+  if (city.famine > 3) return;
   const room = city.housing - city.pop;
   const housingF = room > 4 ? 1 : room > 0 ? 0.6 : 0.15;
   const happyF = 0.6 + city.happy / 200;
   // women of age, married first
   const mothers: number[] = [];
   for (const u of city.members) if (U.sex[u] === 1 && sim.ageYears(u) >= d.adult && sim.ageYears(u) < d.life * 0.65 && !(U.traits[u] & (1 << T.Infertile)) && !(U.flags[u] & UF.Undead)) mothers.push(u);
-  const p = d.breed * 2 / 12 * housingF * happyF * (foodPer > 3 ? 1.2 : 1);
+  const p = d.breed * 2 / 12 * housingF * happyF * Math.min(1.2, 0.35 + foodPer);
   for (const m of mothers) {
     const fert = (U.traits[m] & (1 << T.Fertile) ? 1.5 : 1) * (0.7 + 0.6 * U.genome[m * G + Gene.Fertility] / 255);
     if (!sim.rng.chance(p * fert)) continue;
@@ -979,14 +980,14 @@ function happiness(sim: Sim, city: City) {
 function colonize(sim: Sim, city: City) {
   if (!sim.laws.expansion) return;
   const k = sim.kingdoms[city.kingdom];
-  if (city.pop < 40 || city.stock[R.Food] < 30) return;
-  if (sim.tick - city.founded < TICKS_PER_YEAR * 8) return;
-  const want = city.pop > city.housing * 0.9 || city.pop > 110 || k.ambition === 'expand';
-  if (!want || !sim.rng.chance(k.ambition === 'expand' ? 0.12 : 0.05)) return;
+  if (city.pop < 30 || city.stock[R.Food] < 12) return;
+  if (sim.tick - city.founded < TICKS_PER_YEAR * 5) return;
+  const want = city.pop > city.housing * 0.85 || city.pop > 80 || k.ambition === 'expand' || k.cities.length < 3;
+  if (!want || !sim.rng.chance(k.ambition === 'expand' ? 0.25 : 0.12)) return;
   const U = sim.units;
   const settlers = city.members.filter(u => sim.ageYears(u) >= SPECIES[U.spec[u]].adult && U.army[u] < 0 && !(U.flags[u] & (UF.Ruler | UF.Heir))).slice(0, 6 + sim.rng.int(6));
   if (settlers.length < 5) return;
-  city.stock[R.Food] -= 15;
+  city.stock[R.Food] -= 8;
   const b = people.formBand(sim, settlers, k.id, city.id);
   if (b >= 0) for (const u of settlers) { U.carry[u] = 0; U.hunger[u] = 0; }
 }

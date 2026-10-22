@@ -264,6 +264,13 @@ function raiseArmy(sim: Sim, c: number, targetCity: number, wid: number) {
   // rally outside the town, toward the enemy
   const dx = t.x - city.x, dy = t.y - city.y, d = hyp(dx, dy) || 1;
   a.x = city.x + 1 + dx / d * Math.min(8, city.radius); a.y = city.y + 1 + dy / d * Math.min(8, city.radius);
+  // the rally point must be dry land the soldiers can reach
+  const w = sim.world, home = w.region[w.tileAt(city.x + 1, city.y + 2)];
+  for (let k = 0; k < 12; k++) {
+    const t = w.tileAt(a.x, a.y);
+    if (w.walkable(t) && !w.isWater(t) && w.region[t] === home) break;
+    a.x += (city.x + 1 - a.x) * 0.3; a.y += (city.y + 1 - a.y) * 0.3;
+  }
   if (members.length >= 12) sim.log('army', `General ${gch.name} leads ${members.length} soldiers of ${city.name} against ${t.name}.`, a.x, a.y, { k: city.kingdom, c: targetCity, w: wid, imp: 0 });
   return id;
 }

@@ -270,11 +270,12 @@ function decide(sim: Sim, u: number) {
     return;
   }
   if (age < d.adult) { // children play near home
-    const [tx, ty] = wanderTarget(sim, u, city.x + 1, city.y + 1, 6);
+    const hb = U.house[u] >= 0 ? sim.buildings[U.house[u]] : null;
+    const [tx, ty] = hb && hb.alive ? wanderTarget(sim, u, hb.x + hb.w / 2, hb.y + hb.h + 0.5, 2.5) : wanderTarget(sim, u, city.x + 1, city.y + 1, 3 + Math.sqrt(city.tiles) * 0.4);
     U.tx[u] = tx; U.ty[u] = ty; U.state[u] = St.Wander; U.timer[u] = 100; return;
   }
   if (!startJob(sim, u)) {
-    const [tx, ty] = wanderTarget(sim, u, city.x + 1, city.y + 1, 7);
+    const [tx, ty] = wanderTarget(sim, u, city.x + 1, city.y + 1, 3 + Math.sqrt(city.tiles) * 0.45);
     U.tx[u] = tx; U.ty[u] = ty; U.state[u] = St.Wander; U.timer[u] = 100;
   }
 }

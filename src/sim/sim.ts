@@ -303,6 +303,7 @@ export class Sim {
     const U = this.units;
     this.paths.budget = 30000;
     U.rebuildGrid();
+    this.scanThreats();
     for (let u = 0; u < U.hi; u++) {
       if (!U.alive[u]) continue;
       const d = SPECIES[U.spec[u]];
@@ -324,6 +325,54 @@ export class Sim {
       this.fx.length = k;
       if (this.fx.length > 3000) this.fx.splice(0, this.fx.length - 3000);
     }
+  }
+
+  /** per grid cell: how many creatures there would attack a peaceful person (monsters, undead, bandits, the mad) */
+  threatCell = new Uint16Array(0);
+  /** kingdoms currently at war */
+  warring = new Uint8Array(0);
+  scanThreats() {
+    const U = this.units;
+    const n = U.gw * U.gh;
+    if (this.threatCell.length !== n) this.threatCell = new Uint16Array(n);
+    else this.threatCell.fill(0);
+    if (this.kMaskLo.length !== n) { this.kMaskLo = new Uint32Array(n); this.kMaskHi = new Uint32Array(n); }
+    else { this.kMaskLo.fill(0); this.kMaskHi.fill(0); }
+    for (let u = 0; u < U.hi; u++) {
+      if (!U.alive[u]) continue;
+      const cx = Math.min(U.gw - 1, Math.max(0, (U.x[u] / U.cell) | 0)), cy = Math.min(U.gh - 1, Math.max(0, (U.y[u] / U.cell) | 0));
+      const cell = cy * U.gw + cx;
+      const c = U.city[u];
+      if (c >= 0) { const k = this.cities[c].kingdom & 63; if (k < 32) this.kMaskLo[cell] |= 1 << k; else this.kMaskHi[cell] |= 1 << (k - 32); }
+      const f = U.flags[u];
+      if (!(f & (UF.Undead | UF.Mad | UF.Bandit)) && !SPECIES[U.spec[u]].hostile) continue;
+      this.threatCell[cell]++;
+    }
+    if (this.warring.length < this.kingdoms.length + 1) { this.warring = new Uint8Array(this.kingdoms.length + 16); this.enemyLo = new Uint32Array(this.kingdoms.length + 16); this.enemyHi = new Uint32Array(this.kingdoms.length + 16); }
+    if (this.tick % 5 === 0 || this.tick < 3) for (const k of this.kingdoms) {
+      this.warring[k.id] = k.alive && k.wars.length ? 1 : 0;
+      let lo = 0, hi = 0;
+      if (this.warring[k.id]) for (const [o, r] of k.relations) if (r.status === 'war') { const b = o & 63; if (b < 32) lo |= 1 << b; else hi |= 1 << (b - 32); }
+      this.enemyLo[k.id] = lo; this.enemyHi[k.id] = hi;
+    }
+  }
+  kMaskLo = new Uint32Array(0); kMaskHi = new Uint32Array(0); enemyLo = new Uint32Array(0); enemyHi = new Uint32Array(0);
+  /** could anything near (x,y) within r be an enemy of unit u? (fast rejection for peaceful places) */
+  maybeDanger(u: number, r: number): boolean {
+    const U = this.units;
+    const f = U.flags[u];
+    if (f & (UF.Undead | UF.Mad | UF.Bandit) || SPECIES[U.spec[u]].hostile) return true;
+    const k = this.unitKingdom(u);
+    const war = k >= 0 && this.warring[k];
+    const elo = war ? this.enemyLo[k] : 0, ehi = war ? this.enemyHi[k] : 0;
+    const x0 = Math.max(0, ((U.x[u] - r) / U.cell) | 0), x1 = Math.min(U.gw - 1, ((U.x[u] + r) / U.cell) | 0);
+    const y0 = Math.max(0, ((U.y[u] - r) / U.cell) | 0), y1 = Math.min(U.gh - 1, ((U.y[u] + r) / U.cell) | 0);
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+      const c = cy * U.gw + cx;
+      if (this.threatCell[c]) return true;
+      if (war && ((this.kMaskLo[c] & elo) || (this.kMaskHi[c] & ehi))) return true;
+    }
+    return false;
   }
 
   seasonal() {

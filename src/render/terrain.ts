@@ -21,29 +21,26 @@ export const TREE_COLORS: number[] = [
 const VS = `#version 300 es
 in vec2 aPos;
 uniform vec4 uView; // x0, y0 (world at screen top-left), w, h (world units on screen)
+uniform float uFlip;
 out vec2 vWorld;
 void main() {
   vWorld = uView.xy + aPos * uView.zw;
-  gl_Position = vec4(aPos.x * 2.0 - 1.0, 1.0 - aPos.y * 2.0, 0.0, 1.0);
+  gl_Position = vec4(aPos.x * 2.0 - 1.0, (1.0 - aPos.y * 2.0) * uFlip, 0.0, 1.0);
 }`;
 
-const FS = `#version 300 es
+const BAKE_FS = `#version 300 es
 precision highp float;
 precision highp int;
 in vec2 vWorld;
 out vec4 o;
-uniform sampler2D uTile, uInfo, uOwn, uOver, uKCol;
+uniform sampler2D uTile, uInfo;
 uniform vec2 uMap;
-uniform float uTime, uZoom, uLight, uTreesInShader, uTint, uOverAlpha, uBorders, uCityBorders;
-uniform vec3 uTreeCol[17];
 uniform vec3 uOreCol[9];
 
 float hsh(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 vec4 tileAt(ivec2 t) { return texelFetch(uTile, clamp(t, ivec2(0), ivec2(uMap) - 1), 0); }
 vec4 infoAt(ivec2 t) { return texelFetch(uInfo, clamp(t, ivec2(0), ivec2(uMap) - 1), 0); }
 int flagsAt(ivec2 t) { return int(infoAt(t).r * 255.0 + 0.5); }
-ivec2 ownAt(ivec2 t) { vec4 v = texelFetch(uOwn, clamp(t, ivec2(0), ivec2(uMap) - 1), 0); return ivec2(int(v.r*255.0+0.5) + int(v.g*255.0+0.5)*256, int(v.b*255.0+0.5) + int(v.a*255.0+0.5)*256); }
-vec3 kcol(int k) { return texelFetch(uKCol, ivec2(k % 256, k / 256), 0).rgb; }
 
 void main() {
   vec2 p = vWorld;
@@ -84,9 +81,6 @@ void main() {
 
   if (w || rv) {
     // water: depth shading, drifting glints, foam along the shore
-    float wave = sin(gp.x * 0.35 + gp.y * 0.22 + uTime * 1.6) * sin(gp.y * 0.4 - uTime * 1.1 + hsh(vec2(t)) * 6.28);
-    c *= 0.96 + 0.06 * wave;
-    if (hsh(gp + floor(uTime * 1.5)) > 0.985) c += vec3(0.18);
     if (!rv) {
       bool shore = (flagsAt(t + ivec2(1,0)) & 1) == 0 || (flagsAt(t + ivec2(-1,0)) & 1) == 0 || (flagsAt(t + ivec2(0,1)) & 1) == 0 || (flagsAt(t + ivec2(0,-1)) & 1) == 0;
       if (shore) {
@@ -95,7 +89,7 @@ void main() {
         if ((flagsAt(t + ivec2(-1,0)) & 1) == 0) d = min(d, sp.x);
         if ((flagsAt(t + ivec2(0,1)) & 1) == 0) d = min(d, 7.0 - sp.y);
         if ((flagsAt(t + ivec2(0,-1)) & 1) == 0) d = min(d, sp.y);
-        float foam = step(d, 1.0 + 0.8 * sin(uTime * 2.0 + hsh(vec2(t)) * 6.0));
+        float foam = step(d, 1.0 + step(0.5, hsh(vec2(t) + sp.yx)) * 0.9);
         c = mix(c, vec3(0.86, 0.93, 0.97), foam * 0.55 * step(0.25, hn));
       }
     }
@@ -142,48 +136,80 @@ void main() {
     else if (k > 0.55) c *= 0.82;
   }
 
-  // trees when zoomed out (sprites take over up close)
+  if (lava) c = vec3(0.9, 0.35, 0.08) * (0.85 + 0.3 * hn);
+  o = vec4(c, 1.0);
+}`;
+
+const FS = `#version 300 es
+precision highp float;
+precision highp int;
+in vec2 vWorld;
+out vec4 o;
+uniform sampler2D uBake, uInfo, uOwn, uOver, uKCol;
+uniform vec2 uMap;
+uniform float uTime, uZoom, uLight, uTreesInShader, uTint, uOverAlpha, uBorders, uCityBorders, uScale;
+uniform vec3 uTreeCol[17];
+
+float hsh(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+vec4 infoAt(ivec2 t) { return texelFetch(uInfo, clamp(t, ivec2(0), ivec2(uMap) - 1), 0); }
+ivec2 ownAt(ivec2 t) { vec4 v = texelFetch(uOwn, clamp(t, ivec2(0), ivec2(uMap) - 1), 0); return ivec2(int(v.r*255.0+0.5) + int(v.g*255.0+0.5)*256, int(v.b*255.0+0.5) + int(v.a*255.0+0.5)*256); }
+vec3 kcol(int k) { return texelFetch(uKCol, ivec2(k % 256, k / 256), 0).rgb; }
+
+void main() {
+  vec2 p = vWorld;
+  if (p.x < 0.0 || p.y < 0.0 || p.x >= uMap.x || p.y >= uMap.y) { o = vec4(0.05, 0.075, 0.14, 1.0); return; }
+  ivec2 t = ivec2(floor(p));
+  vec2 f = fract(p);
+  vec2 sp = floor(f * 8.0);
+  vec2 gp = vec2(t) * 8.0 + sp;
+  vec3 c = texelFetch(uBake, ivec2(floor(p * uScale)), 0).rgb;
+  vec4 info = infoAt(t);
+  int fl = int(info.r * 255.0 + 0.5);
+  bool water = (fl & 1) != 0, river = (fl & 2) != 0, lava = (fl & 8) != 0;
+  float hn = hsh(gp);
+  if (water || river) {
+    float wave = sin(gp.x * 0.35 + gp.y * 0.22 + uTime * 1.6) * sin(gp.y * 0.4 - uTime * 1.1 + hsh(vec2(t)) * 6.28);
+    c *= 0.96 + 0.06 * wave;
+    if (hsh(gp + floor(uTime * 1.5)) > 0.987) c += vec3(0.16);
+  }
+  // trees as dots when zoomed out (sprites take over up close)
   int tr = int(info.g * 255.0 + 0.5);
-  if (uTreesInShader > 0.5 && tr > 0 && !w) {
+  if (uTreesInShader > 0.5 && tr > 0 && !water) {
     vec2 q = sp - vec2(3.5, 3.0);
     if (dot(q, q) < 9.5 + 3.0 * hn) c = uTreeCol[tr] * (0.85 + 0.25 * hn) * (sp.y < 3.0 ? 1.12 : 0.95);
   }
-
-  // lava and fire glow (unaffected by night)
   vec3 glow = vec3(0.0);
   if (lava) {
     float m = 0.5 + 0.5 * sin(gp.x * 0.5 + uTime * 2.0 + hsh(vec2(t)) * 6.0) * sin(gp.y * 0.4 - uTime * 1.4);
     c = mix(vec3(0.85, 0.2, 0.05), vec3(1.0, 0.75, 0.2), m * (0.7 + 0.3 * hn));
     glow = c * 0.8;
   }
-  float fire = (flagsAt(t) & 16) != 0 ? infoAt(t).a : 0.0;
+  float fire = (fl & 16) != 0 ? info.a : 0.0;
   if (fire > 0.0) {
     float fl2 = hsh(gp + floor(uTime * 10.0));
     vec3 fc = mix(vec3(0.95, 0.3, 0.05), vec3(1.0, 0.85, 0.2), fl2);
     if (fl2 > 0.35) { c = mix(c * 0.3, fc, 0.85); glow += fc * 0.9 * fire; }
     else c *= 0.35;
   }
-
-  // ownership: tint and borders
   ivec2 own = ownAt(t);
   int k = own.x;
-  if (k > 0 && uTint > 0.0 && !w) c = mix(c, kcol(k), uTint);
-  if (uBorders > 0.5) {
-    float lw = max(1.0, 1.6 / max(uZoom, 0.001) * 8.0); // border width in art pixels, at least one screen pixel
-    ivec2 nb[4] = ivec2[4](ivec2(-1,0), ivec2(1,0), ivec2(0,-1), ivec2(0,1));
-    float dl[4] = float[4](f.x * 8.0, (1.0 - f.x) * 8.0, f.y * 8.0, (1.0 - f.y) * 8.0);
-    for (int i = 0; i < 4; i++) {
-      if (dl[i] >= lw) continue;
-      ivec2 on2 = ownAt(t + nb[i]);
-      if (k > 0 && on2.x != k) { c = mix(c, kcol(k) * 1.15 + 0.05, 0.9); break; }
-      if (uCityBorders > 0.5 && k > 0 && on2.x == k && on2.y != own.y && dl[i] < lw * 0.6 && mod(gp.x + gp.y, 2.0) < 1.0) { c = mix(c, kcol(k), 0.45); break; }
+  if (k > 0 && uTint > 0.0 && !water) c = mix(c, kcol(k), uTint);
+  if (uBorders > 0.5 && k > 0) {
+    float lw = max(1.0, 1.6 / max(uZoom, 0.001) * 8.0);
+    vec2 d8 = f * 8.0;
+    float near = min(min(d8.x, 8.0 - d8.x), min(d8.y, 8.0 - d8.y));
+    if (near < lw) {
+      ivec2 nb[4] = ivec2[4](ivec2(-1,0), ivec2(1,0), ivec2(0,-1), ivec2(0,1));
+      float dl[4] = float[4](d8.x, 8.0 - d8.x, d8.y, 8.0 - d8.y);
+      for (int i = 0; i < 4; i++) {
+        if (dl[i] >= lw) continue;
+        ivec2 on2 = ownAt(t + nb[i]);
+        if (on2.x != k) { c = mix(c, kcol(k) * 1.15 + 0.05, 0.9); break; }
+        if (uCityBorders > 0.5 && on2.y != own.y && dl[i] < lw * 0.6 && mod(gp.x + gp.y, 2.0) < 1.0) { c = mix(c, kcol(k), 0.45); break; }
+      }
     }
   }
-
-  // map-mode overlay
-  vec4 ov = texelFetch(uOver, t, 0);
-  if (uOverAlpha > 0.0 && ov.a > 0.0) c = mix(c, ov.rgb, ov.a * uOverAlpha);
-
+  if (uOverAlpha > 0.0) { vec4 ov = texelFetch(uOver, t, 0); if (ov.a > 0.0) c = mix(c, ov.rgb, ov.a * uOverAlpha); }
   c = c * uLight + glow * (1.0 - uLight) * 0.9;
   o = vec4(c, 1.0);
 }`;
@@ -192,6 +218,8 @@ export class TerrainRenderer {
   gl: WebGL2RenderingContext;
   world!: World;
   prog: WebGLProgram; u: Record<string, WebGLUniformLocation>;
+  bakeProg: WebGLProgram; ub: Record<string, WebGLUniformLocation>;
+  bakeTex: WebGLTexture | null = null; fbo: WebGLFramebuffer | null = null; scale = 8; bakeQueue: number[] = []; bakeMark!: Uint8Array;
   vao: WebGLVertexArrayObject;
   tileTex!: WebGLTexture; infoTex!: WebGLTexture; ownTex!: WebGLTexture; overTex!: WebGLTexture; kcolTex: WebGLTexture;
   tileBuf = new Uint8Array(CHUNK * CHUNK * 4); infoBuf = new Uint8Array(CHUNK * CHUNK * 4);
@@ -207,12 +235,15 @@ export class TerrainRenderer {
     this.gl = gl;
     this.prog = compile(gl, VS, FS);
     this.u = uniforms(gl, this.prog);
+    this.bakeProg = compile(gl, VS, BAKE_FS);
+    this.ub = uniforms(gl, this.bakeProg);
     this.vao = gl.createVertexArray()!;
     gl.bindVertexArray(this.vao);
     const buf = gl.createBuffer()!;
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW);
     const loc = gl.getAttribLocation(this.prog, 'aPos');
+    if (gl.getAttribLocation(this.bakeProg, 'aPos') !== loc) throw new Error('attribute mismatch');
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
     gl.bindVertexArray(null);
@@ -227,6 +258,18 @@ export class TerrainRenderer {
     this.infoTex = makeTex(gl, world.w, world.h, null);
     this.ownTex = makeTex(gl, world.w, world.h, null);
     this.overTex = makeTex(gl, world.w, world.h, new Uint8Array(world.w * world.h * 4));
+    // the baked ground: every tile painted once at full detail, redrawn only when it changes
+    if (this.bakeTex) gl.deleteTexture(this.bakeTex);
+    if (this.fbo) gl.deleteFramebuffer(this.fbo);
+    const maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
+    this.scale = world.w * 8 <= Math.min(4096, maxTex) && world.w <= 256 ? 8 : 4;
+    this.bakeTex = makeTex(gl, world.w * this.scale, world.h * this.scale, null);
+    this.fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.bakeTex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.bakeMark = new Uint8Array(world.cw * world.ch);
+    this.bakeQueue = [];
     world.markAll();
   }
 
@@ -310,6 +353,51 @@ export class TerrainRenderer {
     gl.texSubImage2D(gl.TEXTURE_2D, 0, x0, y0, cw, ch, gl.RGBA, gl.UNSIGNED_BYTE, tb.subarray(0, cw * ch * 4));
     gl.bindTexture(gl.TEXTURE_2D, this.infoTex);
     gl.texSubImage2D(gl.TEXTURE_2D, 0, x0, y0, cw, ch, gl.RGBA, gl.UNSIGNED_BYTE, ib.subarray(0, cw * ch * 4));
+    // this chunk and its neighbours (their edges blend into it) need painting again
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const nx = cx + dx, ny = cy + dy;
+      if (nx < 0 || ny < 0 || nx >= w.cw || ny >= w.ch) continue;
+      const c = ny * w.cw + nx;
+      if (!this.bakeMark[c]) { this.bakeMark[c] = 1; this.bakeQueue.push(c); }
+    }
+  }
+
+  /** paint changed chunks of ground into the baked texture */
+  private bake(max: number) {
+    if (!this.bakeQueue.length) return;
+    const gl = this.gl, w = this.world, u = this.ub, S = this.scale;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
+    gl.useProgram(this.bakeProg);
+    gl.bindVertexArray(this.vao);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.tileTex); gl.uniform1i(u.uTile, 0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.infoTex); gl.uniform1i(u.uInfo, 1);
+    gl.uniform2f(u.uMap, w.w, w.h);
+    gl.uniform1f(u.uFlip, -1);
+    const oc = new Float32Array(9 * 3);
+    ORE_COLORS.forEach((c, i) => { oc[i * 3] = ((c >> 16) & 255) / 255; oc[i * 3 + 1] = ((c >> 8) & 255) / 255; oc[i * 3 + 2] = (c & 255) / 255; });
+    gl.uniform3fv(u.uOreCol, oc);
+    let n = 0;
+    const later: number[] = [];
+    while (this.bakeQueue.length && n < max) {
+      const c = this.bakeQueue.shift()!;
+      const cx = c % w.cw, cy = (c / w.cw) | 0;
+      // wait until this chunk and its neighbours are uploaded, so edges never blend with stale tiles
+      let stale = false;
+      for (let dy = -1; dy <= 1 && !stale; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = cx + dx, ny = cy + dy;
+        if (nx >= 0 && ny >= 0 && nx < w.cw && ny < w.ch && w.dirty[ny * w.cw + nx]) { stale = true; break; }
+      }
+      if (stale) { later.push(c); continue; }
+      this.bakeMark[c] = 0;
+      const x0 = cx * CHUNK, y0 = cy * CHUNK, cw = Math.min(CHUNK, w.w - x0), ch = Math.min(CHUNK, w.h - y0);
+      gl.viewport(x0 * S, y0 * S, cw * S, ch * S);
+      gl.uniform4f(u.uView, x0, y0, cw, ch);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      n++;
+    }
+    for (const c of later) this.bakeQueue.push(c);
+    gl.bindVertexArray(null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
   private uploadOwnChunk(cx: number, cy: number) {
@@ -341,6 +429,7 @@ export class TerrainRenderer {
       if (w.dirtyOverlay[c]) { w.dirtyOverlay[c] = 0; this.uploadOwnChunk(c % w.cw, (c / w.cw) | 0); done++; }
     }
     const gl = this.gl;
+    this.bake(budget * 2);
     if (this.kcolDirty) {
       gl.bindTexture(gl.TEXTURE_2D, this.kcolTex);
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 256, 16, gl.RGBA, gl.UNSIGNED_BYTE, this.kcol);
@@ -358,9 +447,10 @@ export class TerrainRenderer {
     gl.useProgram(this.prog);
     gl.bindVertexArray(this.vao);
     const bind = (unit: number, tex: WebGLTexture, name: string) => { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(u[name], unit); };
-    bind(0, this.tileTex, 'uTile'); bind(1, this.infoTex, 'uInfo'); bind(2, this.ownTex, 'uOwn'); bind(3, this.overTex, 'uOver'); bind(4, this.kcolTex, 'uKCol');
+    bind(0, this.bakeTex!, 'uBake'); bind(1, this.infoTex, 'uInfo'); bind(2, this.ownTex, 'uOwn'); bind(3, this.overTex, 'uOver'); bind(4, this.kcolTex, 'uKCol');
     gl.uniform4f(u.uView, view.x0, view.y0, view.w, view.h);
     gl.uniform2f(u.uMap, this.world.w, this.world.h);
+    gl.uniform1f(u.uFlip, 1); gl.uniform1f(u.uScale, this.scale);
     gl.uniform1f(u.uTime, time); gl.uniform1f(u.uZoom, view.zoom); gl.uniform1f(u.uLight, opts.light);
     gl.uniform1f(u.uTint, opts.tint); gl.uniform1f(u.uOverAlpha, opts.overlay);
     gl.uniform1f(u.uBorders, opts.borders ? 1 : 0); gl.uniform1f(u.uCityBorders, opts.cityBorders ? 1 : 0);
@@ -368,9 +458,6 @@ export class TerrainRenderer {
     const tc = new Float32Array(17 * 3);
     TREE_COLORS.forEach((c, i) => { tc[i * 3] = ((c >> 16) & 255) / 255; tc[i * 3 + 1] = ((c >> 8) & 255) / 255; tc[i * 3 + 2] = (c & 255) / 255; });
     gl.uniform3fv(u.uTreeCol, tc);
-    const oc = new Float32Array(9 * 3);
-    ORE_COLORS.forEach((c, i) => { oc[i * 3] = ((c >> 16) & 255) / 255; oc[i * 3 + 1] = ((c >> 8) & 255) / 255; oc[i * 3 + 2] = (c & 255) / 255; });
-    gl.uniform3fv(u.uOreCol, oc);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
   }

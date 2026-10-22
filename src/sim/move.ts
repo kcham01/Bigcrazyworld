@@ -54,7 +54,7 @@ export function lineClear(sim: Sim, x0: number, y0: number, x1: number, y1: numb
     if (!w.inb(x, y)) return false;
     const i = y * w.w + x;
     if (!passable(sim, i, mode, k)) return false;
-    if (mode === Mode.Walk && n > 0 && stepCost(sim, i, mode) > 3) return false;
+    if (mode === Mode.Walk && n > 0 && stepCost(sim, i, mode) > 4) return false;
     if (x === ex && y === ey) return true;
     const e2 = 2 * err;
     if (e2 >= dy) { err += dy; x += sx; }
@@ -100,10 +100,11 @@ export class PathFinder {
       if (best < 0) return null;
       to = best;
     }
-    if (mode === Mode.Walk || mode === Mode.Swim) {
+    if (mode !== Mode.Fly) {
       if (w.regionsStale) w.computeRegions();
       const ra = w.region[from], rb = w.region[to];
       if (mode === Mode.Walk && ra > 0 && rb > 0 && ra !== rb) return null;   // different islands
+      if (mode === Mode.Sea && ra < 0 && rb < 0 && ra !== rb) return null;    // different seas and lakes
     }
     const st = ++this.stamp;
     const { g, parent, seen, closed } = this;
@@ -144,7 +145,7 @@ export class PathFinder {
   }
 }
 
-const DIRECT = 65535;
+const DIRECT = 65535, FAIL = 65534;
 
 /** Move unit u one tick toward (tx,ty). Returns 1 arrived, 0 still going, -1 can't get there. */
 export function goTo(sim: Sim, u: number, tx: number, ty: number, reach = 0.4): number {
@@ -156,17 +157,25 @@ export function goTo(sim: Sim, u: number, tx: number, ty: number, reach = 0.4): 
   const mode = modeOf(sim, u);
   const k = U.city[u] >= 0 ? sim.cityKingdom(U.city[u]) : -1;
   const goal = w.tileAt(tx, ty);
-  if (U.dest[u] !== goal) {
-    U.dest[u] = goal; U.path[u] = null; U.pathPos[u] = 0;
-    if (dist < 1.5 || lineClear(sim, x, y, tx, ty, mode, k)) U.pathPos[u] = DIRECT;
+  const od = U.dest[u];
+  if (od !== goal) {
+    // a target that only shuffled a step (a moving prey or enemy) keeps the current plan
+    const W = w.w;
+    const near = od >= 0 && Math.abs(od % W - goal % W) <= 1 && Math.abs(((od / W) | 0) - ((goal / W) | 0)) <= 1 && U.pathPos[u] !== FAIL;
+    U.dest[u] = goal;
+    if (!near) {
+      U.path[u] = null; U.pathPos[u] = 0;
+      if (dist < 1.5 || lineClear(sim, x, y, tx, ty, mode, k)) U.pathPos[u] = DIRECT;
+    }
   }
   let ax = tx, ay = ty;
+  if (U.pathPos[u] === FAIL) return dist < 1.5 ? 1 : -1;      // already known to be unreachable
   if (U.pathPos[u] !== DIRECT) {
     let p = U.path[u];
     if (!p) {
-      const r = sim.paths.find(sim, w.tileAt(x, y), goal, mode, k, dist > 60 ? 30000 : 8000);
+      const r = sim.paths.find(sim, w.tileAt(x, y), goal, mode, k, Math.min(dist > 60 ? 12000 : 6000, 600 + (dist * dist) * 3 + dist * 40));
       if (r === undefined) return 0;            // no budget left this tick: wait
-      if (r === null || r.length === 0) { U.dest[u] = -1; return dist < 1.5 ? 1 : -1; }
+      if (r === null || r.length === 0) { U.pathPos[u] = FAIL; return dist < 1.5 ? 1 : -1; }
       p = U.path[u] = r; U.pathPos[u] = 0;
     }
     // skip ahead along the path while the straight line is clear

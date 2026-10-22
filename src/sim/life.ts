@@ -15,7 +15,7 @@ export function updateCreature(sim: Sim, u: number) {
   // metabolism and ageing every 20 ticks (spread over units)
   if ((sim.tick + u) % 20 === 0) {
     if (d.diet !== 'none' && sim.laws.hunger) {
-      U.hunger[u] += 20 * 100 / (TICKS_PER_YEAR * (d.kind === 'titan' ? 3 : 0.7));
+      U.hunger[u] += 20 * 100 / (TICKS_PER_YEAR * (d.kind === 'titan' ? 3 : d.diet === 'carn' ? 2.2 : 1.3));
       if (U.hunger[u] > 100) { U.hunger[u] = 100; sim.damage(u, U.maxHp[u] * 0.08, -1, 'starvation'); if (!U.alive[u]) return; }
     }
     if (sim.laws.oldAge && !d.noBreed && !(U.flags[u] & UF.Immortal)) {
@@ -42,6 +42,7 @@ export function updateCreature(sim: Sim, u: number) {
       const r = goTo(sim, u, U.tx[u], U.ty[u], 0.5);
       if (r === 1) {
         const t = sim.world.tileAt(U.x[u], U.y[u]);
+        if (sim.world.isWater(t)) { U.hunger[u] = Math.max(0, U.hunger[u] - 45); U.state[u] = St.Idle; U.think[u] = 6; return; }   // plankton and weed
         const v = sim.world.veg[t];
         const bite = Math.min(v, 50);
         sim.world.veg[t] = v - bite;
@@ -117,25 +118,30 @@ function decide(sim: Sim, u: number) {
     const c = people.nearestCity(sim, x, y, d.kind === 'titan' ? 60 : 30);
     if (c >= 0) { U.tx[u] = sim.cities[c].x + 0.5; U.ty[u] = sim.cities[c].y + 0.5; U.state[u] = St.Wander; U.timer[u] = 400; return; }
   }
+  // grazers nibble wherever they stand
+  if ((d.diet === 'herb' || d.diet === 'omni') && U.hunger[u] > 15 && d.kind !== 'sea') {
+    const t = sim.world.tileAt(x, y);
+    const v = sim.world.veg[t];
+    if (v > 20) { const bite = Math.min(v, 30); sim.world.veg[t] = v - bite; U.hunger[u] = Math.max(0, U.hunger[u] - bite * 0.8); }
+  } else if (d.kind === 'sea' && d.diet !== 'carn' && sim.world.isWater(sim.world.tileAt(x, y))) U.hunger[u] = Math.max(0, U.hunger[u] - 20);
   // hungry: graze or hunt
   if (U.hunger[u] > 50 && d.diet !== 'none') {
     if (d.diet === 'herb' || (d.diet === 'omni' && sim.rng.chance(0.6))) {
-      const t = findForage(sim, u, 5);
+      const t = findForage(sim, u, U.hunger[u] > 75 ? 10 : 6);
       if (t >= 0) { U.tx[u] = t % sim.world.w + 0.5; U.ty[u] = ((t / sim.world.w) | 0) + 0.5; U.state[u] = St.Graze; return; }
     }
-    if (d.diet !== 'herb') {
+    if (d.diet === 'carn' || (d.diet === 'omni' && d.hp >= 40)) {
       const prey = findPrey(sim, u, 9);
       if (prey >= 0) { engage(sim, u, prey); U.state[u] = St.Hunt; U.timer[u] = 160; return; }
     }
   }
   // breed
-  if (sim.laws.births && !d.noBreed && U.sex[u] === 1 && U.hunger[u] < 45 && sim.ageYears(u) >= d.adult && !(U.flags[u] & UF.Tame && sim.rng.chance(0.5))) {
-    const p = d.breed * THINK / TICKS_PER_YEAR * 3;
+  if (sim.laws.births && !d.noBreed && U.sex[u] === 1 && U.hunger[u] < 65 && sim.ageYears(u) >= d.adult && !(U.flags[u] & UF.Tame && sim.rng.chance(0.5))) {
+    const p = d.breed * THINK / TICKS_PER_YEAR * 2;
     if (sim.rng.chance(p) && roomToBreed(sim, u)) {
       let mate = -1;
-      U.near(x, y, 6, (j) => { if (j !== u && U.sub[j] === U.sub[u] && U.sex[j] === 0 && sim.ageYears(j) >= d.adult) { mate = j; return true; } });
-      if (mate >= 0) { U.targetU[u] = mate; U.targetUid[u] = U.uid[mate]; U.state[u] = St.Mate; U.timer[u] = 120; return; }
-      if (d.kind === 'sea' && d.key === 'fish') { breed(sim, u, u); return; }  // fish just spawn
+      U.near(x, y, 10, (j) => { if (j !== u && U.sub[j] === U.sub[u] && U.sex[j] === 0 && sim.ageYears(j) >= d.adult) { mate = j; return true; } });
+      if (mate >= 0 || d.kind === 'sea') { breed(sim, u, mate >= 0 ? mate : u); U.think[u] = THINK * 2; return; }
     }
   }
   // tame animals stay near their town
@@ -161,9 +167,9 @@ function decide(sim: Sim, u: number) {
 
 function findForage(sim: Sim, u: number, r: number): number {
   const U = sim.units, w = sim.world, mode = modeOf(sim, u);
-  let best = -1, bv = 25;
+  let best = -1, bv = 18;
   const x = U.x[u] | 0, y = U.y[u] | 0;
-  for (let k = 0; k < 10; k++) {
+  for (let k = 0; k < 14; k++) {
     const nx = x + sim.rng.irange(-r, r), ny = y + sim.rng.irange(-r, r);
     if (!w.inb(nx, ny)) continue;
     const i = ny * w.w + nx;
@@ -197,6 +203,7 @@ function roomToBreed(sim: Sim, u: number): boolean {
   const U = sim.units;
   const animals = U.count - sim.peopleCount;
   if (animals > sim.laws.maxUnits * 0.45) return false;
+  if (sim.subs[U.sub[u]].pop > sim.laws.maxUnits * (SPECIES[U.spec[u]].kind === 'sea' ? 0.06 : 0.08)) return false;
   let n = 0;
   U.near(U.x[u], U.y[u], 7, (j) => { if (U.spec[j] === U.spec[u]) n++; return n > 14; });
   return n <= 14;

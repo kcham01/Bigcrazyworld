@@ -87,6 +87,7 @@ function heroMove(sim: Sim, u: number, t: number) {
 /** nearest enemy within r tiles, or -1 */
 export function nearestEnemy(sim: Sim, u: number, r: number): number {
   const U = sim.units;
+  if (!sim.maybeDanger(u, r)) return -1;
   let best = -1, bd = 1e9;
   const x = U.x[u], y = U.y[u];
   U.near(x, y, r, (j) => {

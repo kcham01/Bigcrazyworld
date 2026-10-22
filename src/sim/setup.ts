@@ -48,7 +48,7 @@ export function populate(sim: Sim, o: StartOptions) {
   const w = sim.world, rng = sim.rng;
   if (w.regionsStale) w.computeRegions();
   // wildlife: herds placed by biome
-  const herds = Math.round(w.n / 420 * o.animals);
+  const herds = Math.round(w.n / 260 * o.animals);
   for (let k = 0; k < herds; k++) {
     const i = rng.int(w.n);
     const opts = WILD[w.biome[i] as B];
@@ -57,7 +57,7 @@ export function populate(sim: Sim, o: StartOptions) {
     const d = SPECIES_BY_KEY[key];
     if (!o.monsters && d.hostile) continue;
     const sub = sim.baseSubspecies(d.id);
-    const n = d.kind === 'monster' ? 1 : d.diet === 'carn' ? rng.irange(2, 4) : rng.irange(3, 7);
+    const n = d.kind === 'monster' ? 1 : d.diet === 'carn' ? rng.irange(2, 4) : rng.irange(4, 8);
     const x0 = i % w.w + 0.5, y0 = ((i / w.w) | 0) + 0.5;
     for (let m = 0; m < n; m++) {
       const x = x0 + rng.range(-2, 2), y = y0 + rng.range(-2, 2);

@@ -153,7 +153,7 @@ export function stepWorld(sim: Sim) {
     // crops ripen on their own in the growing season
     const f = w.field[i];
     if (f && f < 250 && season !== 3) {
-      const g = Math.round((season === 1 ? 10 : 6) * (0.4 + bd.fert));
+      const g = Math.round((season === 2 ? 40 : 70) * (0.5 + bd.fert) * (sun ? 0.5 : 1));
       w.field[i] = Math.min(250, f + g);
       if ((f >> 6) !== (w.field[i] >> 6)) w.markDirty(i);
     }
