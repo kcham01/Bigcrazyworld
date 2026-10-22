@@ -362,12 +362,16 @@ assert len({e['k'] for e in enchants}) == len(enchants), 'enchant key collision'
 # wowsims' enchant ids -> our keys, so characters saved by earlier versions keep their enchants
 alias = {}
 ws_names = {}
+ws_eff = {}             # the game's enchant (SpellItemEnchantment) id, used in item links
 for line in open(os.path.join(SIMS, 'sim/core/items/all_enchants.go')).read().splitlines():
     line = line.strip()
     if line.startswith('{ID:'):
         wid = int(re.search(r'\bID:\s*(\d+)', line).group(1))
         nm = re.search(r'Name:\s*"([^"]+)"', line).group(1)
         ws_names[wid] = nm
+        m_eff = re.search(r'EffectID:\s*(\d+)', line)
+        if m_eff:
+            ws_eff[wid] = int(m_eff.group(1))
 
 
 def norm(n):
@@ -383,6 +387,8 @@ for wid, nm in ws_names.items():
     e = by_name.get(norm(nm))
     if e:
         alias[wid] = e['k']
+        if wid in ws_eff:
+            e['eff'] = ws_eff[wid]
     else:
         print('  no enchant for wowsims', wid, nm)
 print('enchants', len(enchants), 'aliases', len(alias))

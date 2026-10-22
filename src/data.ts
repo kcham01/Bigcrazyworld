@@ -23,6 +23,7 @@ export interface Gem { id: number; n: string; q: number; c: string; ph: number; 
 export interface Enchant {
   k: number; id: number; n: string; sl: string[]; st: Stats; req: number; src: string; tx: string;
   ic?: string; spell?: number; cl?: string; prof?: string; rep?: string;
+  eff?: number;   // the game's own enchant id (as in item links), where known
 }
 export interface Consumable {
   id: number; n: string; c: 'flask' | 'battle' | 'guardian' | 'food' | 'scroll' | 'potion'; q: number; ic: string;
@@ -87,17 +88,17 @@ export const SLOTS: { id: Slot; label: string; item: string }[] = [
 ];
 
 /** which weapon / armor / relic types each class can use */
-const WEAPONS: Record<ClassId, string[]> = {
+export const WEAPONS: Record<ClassId, string[]> = {
   warrior: ['axe', 'mace', 'sword', 'dagger', 'fist', 'polearm', 'staff', 'shield', 'offhand'],
   paladin: ['axe', 'mace', 'sword', 'polearm', 'shield', 'offhand'],
   druid: ['mace', 'dagger', 'fist', 'polearm', 'staff', 'offhand'],
 };
-const RANGED: Record<ClassId, string[]> = {
+export const RANGED: Record<ClassId, string[]> = {
   warrior: ['bow', 'gun', 'crossbow', 'thrown'],
   paladin: ['libram'],
   druid: ['idol'],
 };
-const ARMOR: Record<ClassId, string[]> = {
+export const ARMOR: Record<ClassId, string[]> = {
   warrior: ['cloth', 'leather', 'mail', 'plate'],
   paladin: ['cloth', 'leather', 'mail', 'plate'],
   druid: ['cloth', 'leather'],
