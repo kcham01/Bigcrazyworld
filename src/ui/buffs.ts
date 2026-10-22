@@ -26,7 +26,7 @@ export function buffsView(): HTMLElement {
       () => { p.opts.holyShield = !p.opts.holyShield; commit(); }, null, !hs));
     const rd = talentRank(p, 'redoubt');
     mine.push(toggle(p.opts.redoubt && rd > 0, icon('ability_defend', 32, 'Rd'), 'Redoubt',
-      rd ? `+${6 * rd}% block after you are crit. A proc: only counted in the "procs" view.` : 'Needs the Redoubt talent.',
+      rd ? `Hits on you have a 10% chance to give +${6 * rd}% block for 10 sec or 5 blocks. A proc: only counted in the "procs" view.` : 'Needs the Redoubt talent.',
       () => { p.opts.redoubt = !p.opts.redoubt; commit(); }, null, !rd));
   }
   if (p.cls === 'warrior') {

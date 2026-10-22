@@ -100,7 +100,15 @@ export function sumGear(p: Profile): GearSum {
     });
     socketsMatched[slot] = matched;
     if (matched && it.sb) add(st, it.sb);
-    if (g.ench) { const e = ENCHANT_BY_ID.get(g.ench); if (e) add(st, e.st); }
+    if (g.ench) {
+      const e = ENCHANT_BY_ID.get(g.ench);
+      if (e) {
+        // armor enchants (cloak, armor kits) count as armor from items, as in wowsims
+        const es = { ...e.st };
+        if (es.armor) { itemArmor += es.armor; delete es.armor; }
+        add(st, es);
+      }
+    }
   }
   const m = meta as GearSum['meta'];
   let eternalMeta = false;
@@ -202,10 +210,14 @@ export function computeSheet(p: Profile, mode: Mode = 'procs'): Sheet {
   if (p.race === 'tauren') health = Math.floor(health * 1.05);
 
   // armor
+  // armor from items: Toughness and Thick Hide add a share of it; Dire Bear Form adds 400%, and Thick
+  // Hide applies on top of the bear bonus too (wowsims: +50% of item armor at 3/3 in bear form)
   let itemArmorMul = 1;
   if (cls === 'warrior' || cls === 'paladin') itemArmorMul += 0.02 * T('toughness');
-  if (cls === 'druid') itemArmorMul += (0.1 / 3) * T('thickHide');
-  if (bear) itemArmorMul += 4;     // Dire Bear Form: +400% armor from items
+  if (cls === 'druid') {
+    const thick = [0, 0.04, 0.07, 0.10][Math.min(3, T('thickHide'))];
+    itemArmorMul = (bear ? 5 : 1) * (1 + thick);
+  }
   const itemArmor = gear.itemArmor * itemArmorMul;
   const armor = Math.round(itemArmor + agi * 2 + (flat.armor || 0));
   const armorReduction = Math.min(75, armor / (armor + 11960) * 100);   // vs a level 73 attacker: 467.5 * 73 - 22167.5

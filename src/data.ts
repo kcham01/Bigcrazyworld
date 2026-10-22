@@ -27,7 +27,13 @@ export interface TalentTree { name: string; talents: Talent[] }
 export const ITEMS: Item[] = (itemsJson as any).items;
 export const SETS: Record<string, ItemSet> = (itemsJson as any).sets;
 export const GEMS: Gem[] = gemsJson as any;
-export const ENCHANTS: Enchant[] = enchantsJson as any;
+// tank enchants the wowsims data leaves out (ids are the enchanting spells, for the Wowhead links)
+const EXTRA_ENCHANTS: Enchant[] = [
+  { id: 27946, eff: 0, n: 'Enchant Shield - Shield Block', s: 'weapon', q: 2, st: { block: 15 }, spell: 1, shield: 1 },
+  { id: 27961, eff: 0, n: 'Enchant Cloak - Major Armor', s: 'back', q: 2, st: { armor: 120 }, spell: 1 },
+  { id: 27962, eff: 0, n: 'Enchant Cloak - Major Resistance', s: 'back', q: 2, st: { arcres: 7, fireres: 7, frostres: 7, natres: 7, shadres: 7 }, spell: 1 },
+];
+export const ENCHANTS: Enchant[] = [...(enchantsJson as any as Enchant[]), ...EXTRA_ENCHANTS.filter(x => !(enchantsJson as any as Enchant[]).some(e => e.id === x.id))];
 export const BASES: Record<ClassId, Record<string, { hp: number; str: number; agi: number; sta: number; int: number; spi: number; dodge: number }>> = basesJson as any;
 export const TALENTS: Record<ClassId, TalentTree[]> = talentsJson as any;
 

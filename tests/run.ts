@@ -3,7 +3,7 @@ import { bossTable, BOSS, computeSheet, critCap, Profile, sumGear, verdict, capV
 import { coverage } from '../src/sim';
 import { loadAll } from '../src/store';
 import { spent, valid, treeSpent } from '../src/talentRules';
-import { ITEMS, GEMS, TALENTS, canUse } from '../src/data';
+import { ITEMS, GEMS, TALENTS, canUse, ITEM_BY_ID, ENCHANTS } from '../src/data';
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = '') {
@@ -104,6 +104,19 @@ check('talent trees', TALENTS.paladin.length === 3 && TALENTS.warrior[2].name ==
   check('bear has no block or parry', !bear.canBlock && !bear.canParry);
   check('dire bear armor multiplier', bear.armor > caster.armor * 3, `${bear.armor} vs ${caster.armor}`);
   check('tauren +5% health', bear.health > 0);
+  const chestArmor = ITEM_BY_ID.get(p.gear.chest!.id)!.st.armor!;
+  check('dire bear: item armor x5', Math.abs((bear.armor - bear.agi * 2) - chestArmor * 5) <= 1, `${bear.armor - bear.agi * 2} vs ${chestArmor * 5}`);
+  const th = { ...p, talents: { '1.thickHide': 3 } };
+  const thBear = computeSheet(th);
+  check('thick hide 3/3 in bear: item armor x5.5', Math.abs((thBear.armor - thBear.agi * 2) - chestArmor * 5.5) <= 1, `${thBear.armor - thBear.agi * 2} vs ${chestArmor * 5.5}`);
+  const th1 = computeSheet({ ...p, talents: { '1.thickHide': 1 }, opts: { ...p.opts, bear: false } });
+  check('thick hide 1/3 out of form: +4%', Math.abs((th1.armor - th1.agi * 2) - Math.round(chestArmor * 1.04)) <= 1, `${th1.armor - th1.agi * 2}`);
+  const cloakEnch = ENCHANTS.find(e => e.s === 'back' && (e.st.armor || 0) > 0);
+  if (cloakEnch) {
+    const withEnch = { ...p, gear: { ...p.gear, back: { id: ITEMS.find(i => i.s === 'back' && i.ph <= 1)!.id, ench: cloakEnch.id } } };
+    const noEnch = { ...p, gear: { ...p.gear, back: { id: withEnch.gear.back!.id } } };
+    check('armor enchant is multiplied by dire bear', computeSheet(withEnch).armor - computeSheet(noEnch).armor === cloakEnch.st.armor! * 5, cloakEnch.n);
+  }
 }
 
 // example characters: valid talent builds and full gear
