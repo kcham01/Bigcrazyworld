@@ -9,7 +9,7 @@ import { GOV_NAMES } from '../src/sim/entities';
 
 const years = +(process.argv[2] || 200), size = +(process.argv[3] || 256), seed = process.argv[4] || 'test1';
 const t0 = Date.now();
-const sim = newWorld({ ...DEFAULT_GEN, w: size, h: size, seed }, { ...DEFAULT_START, races: ['human', 'elf', 'dwarf', 'orc', 'goblin', 'lizard'] });
+const sim = newWorld({ ...DEFAULT_GEN, w: size, h: size, seed }, { ...DEFAULT_START, races: (process.env.RACES || 'human,elf,dwarf,orc,goblin,lizard').split(',') });
 console.log(`world ${size}x${size} seed=${seed}: ${sim.units.count} creatures, gen ${Date.now() - t0} ms`);
 let last = Date.now(), errors = 0;
 const evCount: Record<string, number> = {};

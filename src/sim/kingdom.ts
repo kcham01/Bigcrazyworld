@@ -478,8 +478,11 @@ export function stepKingdoms(sim: Sim) {
     if (k.cities.length > k.peakCities) k.peakCities = k.cities.length;
     // research
     if (k.researching) {
-      k.research += (0.25 + Math.sqrt(pop) * 0.12) * sim.laws.techSpeed * (k.goldenAge > sim.tick ? 1.5 : 1);
-      const cost = techCost(sim, k.researching);
+      k.research += (0.35 + Math.sqrt(pop) * 0.17) * sim.laws.techSpeed * (k.goldenAge > sim.tick ? 1.5 : 1) * (sim.ageKind === 'wonders' ? 1.5 : 1);
+      // ideas known by neighbours are far easier to pick up
+      let known = 0, met = 0;
+      for (const o of k.contacts) { const ko = sim.kingdoms[o]; if (ko && ko.alive) { met++; if (ko.techs.has(k.researching)) known++; } }
+      const cost = techCost(sim, k.researching) * (met ? 1 - 0.6 * known / met : 1);
       if (k.research >= cost) { k.research -= cost; learn(sim, k, k.researching); }
     } else nextResearch(sim, k);
     // ruler
@@ -522,7 +525,7 @@ function stability(sim: Sim, k: Kingdom) {
       if (city.capital) continue;
       city.loyalty += (k.stability - 45) * 0.1 + (city.happy - 45) * 0.1;
       city.loyalty = Math.max(0, Math.min(100, city.loyalty));
-      if (city.loyalty < 15 && sim.rng.chance(0.08)) { war.rebellion(sim, c, 'unrest'); break; }
+      if (city.loyalty < 12 && sim.rng.chance(0.05)) { war.rebellion(sim, c, 'unrest'); break; }
     }
   } else for (const c of k.cities) sim.cities[c].loyalty = Math.min(100, sim.cities[c].loyalty + 0.5);
 }

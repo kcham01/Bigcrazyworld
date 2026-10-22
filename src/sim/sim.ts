@@ -26,7 +26,7 @@ export interface Laws {
 export const DEFAULT_LAWS: Laws = {
   births: true, oldAge: true, hunger: true, evolution: true, sapience: true, rebellion: true, wars: true, diplomacy: true,
   coalitions: true, plagues: true, disasters: true, monsters: true, magic: true, crime: true, fog: true, ages: true, undead: true,
-  expansion: true, techSpeed: 1, maxUnits: 7000, peace: false, dayNight: true,
+  expansion: true, techSpeed: 1, maxUnits: 5000, peace: false, dayNight: true,
 };
 
 /** short-lived visual effects for the renderer (projectiles, explosions, text) */

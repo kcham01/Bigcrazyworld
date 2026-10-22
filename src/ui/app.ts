@@ -16,6 +16,7 @@ import { icon } from './icons';
 import { h, esc, hex, fmt } from './dom';
 import * as V from './panels';
 import { saveWorld, loadWorld, listWorlds, deleteWorld } from './storage';
+import { sfx, setSound, soundOn } from './sound';
 import type { HEvent } from '../sim/entities';
 
 const SPEEDS = [0, 1, 3, 8, 25];
@@ -262,7 +263,12 @@ export class App {
     this.lastApply = now;
     const [wx, wy] = this.cam.screenToWorld(this.heldX, this.heldY);
     const msg = applyPower(this.sim, this.power, wx, wy, this.brushR, this.pstate);
-    if (msg) this.hint(msg);
+    if (msg) this.hint(msg); else this.powerSound(this.power);
+  }
+  powerSound(id: string) {
+    if (id.startsWith('spawn:') || id === 'tribe') return sfx('spawn');
+    const m: Record<string, string> = { meteor: 'boom', bomb: 'boom', nuke: 'nuke', lightning: 'thunder', quake: 'quake', volcano: 'quake', fire: 'fire', rain: 'rain', blizzard: 'rain', bless: 'bless', heal: 'bless', harvest: 'bless', fertility: 'bless', spark: 'bless', hero: 'fanfare', immortal: 'bless', inspire: 'bless', gold: 'bless', curse: 'curse', madness: 'curse', zombify: 'curse', plague: 'curse', erase: 'boom', war: 'war', rebel: 'war', peace: 'bell', alliance: 'bell', crown: 'fanfare', faith: 'bell', tech: 'fanfare', tornado: 'thunder', flood: 'rain' };
+    sfx(m[id] || 'paint');
   }
 
   tap(sx: number, sy: number) {
@@ -289,7 +295,7 @@ export class App {
     if (p && p.kind === 'tap') {
       if (p.id !== 'favorite' && p.id !== 'patron') this.pushUndo();
       const msg = applyPower(sim, this.power, wx, wy, this.brushR, this.pstate);
-      if (msg) this.hint(msg);
+      if (msg) this.hint(msg); else this.powerSound(this.power);
       if (this.power === 'patron') this.buildHud();
     }
   }
@@ -299,6 +305,7 @@ export class App {
     const sim = this.sim!;
     const patron = sim.patron >= 0 && (e.k === sim.patron || e.k2 === sim.patron);
     if (e.imp < 2 && !patron && e.kind !== 'fav') return;
+    sfx(e.kind === 'war' || e.kind === 'rebel' || e.kind === 'coalition' ? 'war' : e.kind === 'era' || e.kind === 'golden' || e.kind === 'stars' || e.kind === 'hero' ? 'fanfare' : e.kind === 'fav' || e.kind === 'death' ? 'death' : 'bell');
     const k = e.k !== undefined ? sim.kingdoms[e.k] : null;
     const el = h('div', { class: 'toast panel' + (e.imp >= 2 ? ' big' : ''), style: { '--k': k ? hex(k.color) : 'var(--dim)' } as any },
       h('span', { class: 'y' }, 'Y' + sim.year), h('span', {}, e.text));
@@ -354,6 +361,7 @@ export class App {
     this.el.brush = brush;
     ui.append(h('div', { class: 'tools' }, cats, h('div', { class: 'row' }, powers, brush)));
     const showCat = (id: string) => {
+      if (this.cat !== id) sfx('tab');
       this.cat = id;
       cats.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.cat === id));
       powers.innerHTML = '';
@@ -381,6 +389,7 @@ export class App {
   }
 
   choosePower(id: string) {
+    sfx('click');
     this.power = id; this.pstate = { race: this.pstate.race };
     this.el.powers.querySelectorAll('.power').forEach(b => b.classList.toggle('on', (b as HTMLElement).dataset.id === id));
     const p = POWER_BY_ID[id];
@@ -516,6 +525,7 @@ export class App {
       });
     });
     body.querySelectorAll('[data-map]').forEach((el) => el.addEventListener('click', () => { this.overlayMode = (el as HTMLElement).dataset.map!; this.overlayAt = 0; this.renderSheet(false); }));
+    body.querySelectorAll('[data-sound]').forEach((el) => el.addEventListener('change', () => { setSound((el as HTMLInputElement).checked); sfx('click'); }));
     body.querySelectorAll('[data-opt]').forEach((el) => el.addEventListener('change', () => { const k = (el as HTMLElement).dataset.opt!; (this as any)[k] = (el as HTMLInputElement).checked; }));
     body.querySelectorAll('[data-age]').forEach((el) => el.addEventListener('click', () => { import('../sim/nature').then(n => n.setAge(this.sim!, (el as HTMLElement).dataset.age!, 30)); }));
   }
@@ -561,7 +571,8 @@ export class App {
         const modes: [string, string][] = [['none', 'Plain'], ['realms', 'Realms'], ['cultures', 'Peoples'], ['faiths', 'Faiths'], ['density', 'Population'], ['height', 'Height'], ['heat', 'Temperature'], ['fertile', 'Fertility'], ['ore', 'Ore']];
         return `<div class="actions">${modes.map(([k, n]) => `<button data-map="${k}" class="${this.overlayMode === k ? 'on' : ''}">${n}</button>`).join('')}</div>
           <label class="toggle"><span>Names on the map</span><input type="checkbox" data-opt="labels" ${this.labels ? 'checked' : ''}></label>
-          <label class="toggle"><span>Borders</span><input type="checkbox" data-opt="borders" ${this.borders ? 'checked' : ''}></label>`;
+          <label class="toggle"><span>Borders</span><input type="checkbox" data-opt="borders" ${this.borders ? 'checked' : ''}></label>
+          <label class="toggle"><span>Sounds</span><input type="checkbox" data-sound="1" ${soundOn ? 'checked' : ''}></label>`;
       } }] };
       case 'laws': return { title: 'World laws', sub: 'The rules your world runs by', tabs: [{ name: 'Laws', html: () => {
         const L = sim.laws;

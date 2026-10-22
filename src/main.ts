@@ -22,6 +22,21 @@ else if (q.get('seed')) {
     // run on until an army is on the move, then look at it
     for (let t = 0; t < 240 * 40; t++) { const a = sim.armies.find(a => (a.state === 'siege' || a.state === 'battle' || a.state === 'march') && a.members.length > 6); if (a) { app.cam.x = a.x; app.cam.y = a.y; app.cam.zoom = +(q.get('zoom') || 14); break; } sim.step(); }
   }
+  if (q.get('demo') === 'powers') {
+    import('./sim/powers').then(P => {
+      const c = sim.cities.filter(c => c.alive).sort((a, b) => b.pop - a.pop)[0];
+      const x = c ? c.x : sim.world.w / 2, y = c ? c.y : sim.world.h / 2;
+      const st = {};
+      P.applyPower(sim, 'meteor', x + 10, y - 4, 4, st);
+      P.applyPower(sim, 'volcano', x - 12, y + 6, 4, st);
+      P.applyPower(sim, 'fire', x + 3, y + 8, 3, st);
+      P.applyPower(sim, 'tornado', x + 6, y - 10, 3, st);
+      P.applyPower(sim, 'spawn:dragon', x - 4, y - 8, 1, st);
+      P.applyPower(sim, 'bless', x, y, 4, st);
+      for (let t = 0; t < 30; t++) sim.step();
+      app.cam.x = x; app.cam.y = y; app.cam.zoom = 11;
+    });
+  }
   if (q.get('panel')) app.select({ kind: 'panel', id: q.get('panel')! });
   if (q.get('inspect') === 'city') { const c = sim.cities.filter(c => c.alive).sort((a, b) => b.pop - a.pop)[0]; if (c) app.select({ kind: 'city', id: c.id }); }
   if (q.get('inspect') === 'kingdom') { const k = sim.kingdoms.filter(k => k.alive).sort((a, b) => b.pop - a.pop)[0]; if (k) app.select({ kind: 'kingdom', id: k.id }); }
