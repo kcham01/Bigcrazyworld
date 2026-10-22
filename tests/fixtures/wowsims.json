@@ -1,0 +1,534 @@
+[
+ {
+  "name": "wowsims Feral Tank (Tauren, P1)",
+  "cls": "druid",
+  "race": "tauren",
+  "gear": [
+   {
+    "id": 29098,
+    "enchant": 29192,
+    "gems": [
+     24067,
+     32409
+    ]
+   },
+   {
+    "id": 28509
+   },
+   {
+    "id": 29100,
+    "enchant": 28911,
+    "gems": [
+     24033,
+     24033
+    ]
+   },
+   {
+    "id": 28660,
+    "enchant": 34004
+   },
+   {
+    "id": 29096,
+    "enchant": 24003,
+    "gems": [
+     24067,
+     24055,
+     24055
+    ]
+   },
+   {
+    "id": 28978,
+    "enchant": 22533,
+    "gems": [
+     24033
+    ]
+   },
+   {
+    "id": 29097,
+    "enchant": 33153
+   },
+   {
+    "id": 28986
+   },
+   {
+    "id": 29099,
+    "enchant": 29536
+   },
+   {
+    "id": 30674,
+    "enchant": 35297
+   },
+   {
+    "id": 29279,
+    "enchant": 22535
+   },
+   {
+    "id": 28792,
+    "enchant": 22535
+   },
+   {
+    "id": 28830
+   },
+   {
+    "id": 23836
+   },
+   {
+    "id": 28476,
+    "enchant": 22556
+   },
+   {
+    "id": 23198
+   }
+  ],
+  "talents": {
+   "ferocity": 5,
+   "sharpenedClaws": 3,
+   "shreddingAttacks": 2,
+   "predatoryStrikes": 3,
+   "primalFury": 2,
+   "savageFury": 2,
+   "faerieFire": 1,
+   "heartOfTheWild": 5,
+   "survivalOfTheFittest": 3,
+   "leaderOfThePack": 1,
+   "improvedLeaderOfThePack": 2,
+   "predatoryInstincts": 5,
+   "mangle": 1,
+   "furor": 5,
+   "naturalist": 5,
+   "naturalShapeshifter": 3,
+   "intensity": 3,
+   "omenOfClarity": 1
+  },
+  "buffs": {
+   "brill": 1,
+   "motw": 2,
+   "bshout": 2,
+   "lotp": 1,
+   "goa": 2,
+   "manaspring": 1,
+   "braided": 1,
+   "soe": 2,
+   "kings": 1,
+   "might": 2,
+   "urage": 1
+  },
+  "cons": {
+   "battle": "Elixir of Major Agility",
+   "food": "Grilled Mudfish",
+   "scrolls": [
+    "Scroll of Strength V",
+    "Scroll of Agility V"
+   ]
+  },
+  "abil": {
+   "bear": true
+  },
+  "expect": {
+   "str": 550.638,
+   "agi": 649.2090000000001,
+   "sta": 1184.5515,
+   "int": 350.77680000000004,
+   "spi": 202.80700000000002,
+   "sp": 5.0,
+   "heal": 18.0,
+   "arcsp": 0.0,
+   "firesp": 0.0,
+   "frostsp": 0.0,
+   "holysp": 0.0,
+   "natsp": 0.0,
+   "shadsp": 0.0,
+   "mp5": 50.0,
+   "shit": 0.0,
+   "scrit": 138.20599173803527,
+   "shaste": 0.0,
+   "spen": 0.0,
+   "ap": 3390.5036,
+   "hit": 57.0,
+   "crit": 980.4581888,
+   "haste": 0.0,
+   "arp": 0.0,
+   "exp": 0.0,
+   "mana": 7351.652000000001,
+   "energy": 0.0,
+   "rage": 0.0,
+   "armor": 26357.418,
+   "rap": 410.0,
+   "def": 78.0,
+   "block": 0.0,
+   "bv": 0.0,
+   "dodge": 809.9959848385819,
+   "parry": 0.0,
+   "res": 65.0,
+   "hp": 16043.49075,
+   "arcres": 0.0,
+   "fireres": 0.0,
+   "frostres": 0.0,
+   "natres": 10.0,
+   "shadres": 0.0,
+   "fap": 894.0
+  }
+ },
+ {
+  "name": "wowsims Protection Warrior (Orc, P1)",
+  "cls": "warrior",
+  "race": "orc",
+  "gear": [
+   {
+    "id": 29011,
+    "enchant": 29192,
+    "gems": [
+     25896,
+     24033
+    ]
+   },
+   {
+    "id": 28244,
+    "gems": [
+     33782
+    ]
+   },
+   {
+    "id": 29023,
+    "enchant": 28911,
+    "gems": [
+     24033,
+     24033
+    ]
+   },
+   {
+    "id": 28672,
+    "enchant": 34004
+   },
+   {
+    "id": 29012,
+    "enchant": 24003,
+    "gems": [
+     24033,
+     24033,
+     24033
+    ]
+   },
+   {
+    "id": 28996,
+    "enchant": 22533,
+    "gems": [
+     33782
+    ]
+   },
+   {
+    "id": 30644,
+    "enchant": 33153
+   },
+   {
+    "id": 28995
+   },
+   {
+    "id": 28621,
+    "enchant": 29536,
+    "gems": [
+     24033,
+     24033,
+     24033
+    ]
+   },
+   {
+    "id": 28747,
+    "enchant": 35297,
+    "gems": [
+     24033,
+     24033
+    ]
+   },
+   {
+    "id": 30834
+   },
+   {
+    "id": 29279
+   },
+   {
+    "id": 28121
+   },
+   {
+    "id": 29387
+   },
+   {
+    "id": 28749,
+    "enchant": 22559
+   },
+   {
+    "id": 28825,
+    "enchant": 28282,
+    "gems": [
+     24033
+    ]
+   },
+   {
+    "id": 28826
+   }
+  ],
+  "talents": {
+   "improvedHeroicStrike": 3,
+   "deflection": 5,
+   "improvedThunderClap": 3,
+   "angerManagement": 1,
+   "deepWounds": 3,
+   "impale": 2,
+   "cruelty": 3,
+   "anticipation": 5,
+   "shieldSpecialization": 5,
+   "toughness": 5,
+   "improvedShieldBlock": 1,
+   "defiance": 3,
+   "improvedSunderArmor": 3,
+   "shieldMastery": 1,
+   "oneHandedWeaponSpecialization": 5,
+   "shieldSlam": 1,
+   "focusedRage": 3,
+   "vitality": 5,
+   "devastate": 1
+  },
+  "buffs": {
+   "brill": 1,
+   "motw": 2,
+   "bshout": 2,
+   "lotp": 1,
+   "goa": 1,
+   "soe": 2,
+   "kings": 1,
+   "might": 2,
+   "urage": 1,
+   "cshout": 1
+  },
+  "cons": {
+   "battle": "Elixir of Mastery",
+   "guardian": "Gift of Arthas"
+  },
+  "abil": {
+   "defstance": true
+  },
+  "expect": {
+   "str": 527.5600000000001,
+   "agi": 403.70000000000005,
+   "sta": 1069.5300000000002,
+   "int": 119.9,
+   "spi": 102.30000000000001,
+   "sp": 0.0,
+   "heal": 0.0,
+   "arcsp": 0.0,
+   "firesp": 0.0,
+   "frostsp": 0.0,
+   "holysp": 0.0,
+   "natsp": 0.0,
+   "shadsp": 0.0,
+   "mp5": 0.0,
+   "shit": 0.0,
+   "scrit": 0.0,
+   "shaste": 0.0,
+   "spen": 0.0,
+   "ap": 2306.832,
+   "hit": 110.0,
+   "crit": 542.9232,
+   "haste": 0.0,
+   "arp": 0.0,
+   "exp": 58.64,
+   "mana": 0.0,
+   "energy": 0.0,
+   "rage": 0.0,
+   "armor": 16455.2,
+   "rap": 470.0,
+   "def": 211.308,
+   "block": 81.423,
+   "bv": 337.0158,
+   "dodge": 307.8341740000001,
+   "parry": 139.269,
+   "res": 68.0,
+   "hp": 16039.300000000003,
+   "arcres": 0.0,
+   "fireres": 0.0,
+   "frostres": 0.0,
+   "natres": 0.0,
+   "shadres": 10.0,
+   "fap": 0.0
+  }
+ },
+ {
+  "name": "wowsims Protection Paladin (Blood Elf, P4)",
+  "cls": "paladin",
+  "race": "bloodelf",
+  "gear": [
+   {
+    "id": 32521,
+    "enchant": 29191,
+    "gems": [
+     25896,
+     32196
+    ]
+   },
+   {
+    "id": 32362
+   },
+   {
+    "id": 30998,
+    "enchant": 28911,
+    "gems": [
+     32200,
+     32196
+    ]
+   },
+   {
+    "id": 33593,
+    "enchant": 33148
+   },
+   {
+    "id": 30991,
+    "enchant": 27957,
+    "gems": [
+     32196,
+     32196,
+     32221
+    ]
+   },
+   {
+    "id": 32232,
+    "enchant": 22534
+   },
+   {
+    "id": 30985,
+    "enchant": 33153,
+    "gems": [
+     32196
+    ]
+   },
+   {
+    "id": 32342,
+    "gems": [
+     32200,
+     32200
+    ]
+   },
+   {
+    "id": 30995,
+    "enchant": 24274,
+    "gems": [
+     32200
+    ]
+   },
+   {
+    "id": 32245,
+    "enchant": 35297,
+    "gems": [
+     32200,
+     32200
+    ]
+   },
+   {
+    "id": 32261,
+    "enchant": 22536
+   },
+   {
+    "id": 29172,
+    "enchant": 22536
+   },
+   {
+    "id": 31858
+   },
+   {
+    "id": 33829
+   },
+   {
+    "id": 30910,
+    "enchant": 22555
+   },
+   {
+    "id": 32375,
+    "enchant": 28282
+   },
+   {
+    "id": 33504
+   }
+  ],
+  "talents": {
+   "redoubt": 5,
+   "precision": 3,
+   "toughness": 5,
+   "blessingOfKings": 1,
+   "improvedRighteousFury": 3,
+   "anticipation": 5,
+   "blessingOfSanctuary": 1,
+   "reckoning": 4,
+   "sacredDuty": 2,
+   "oneHandedWeaponSpecialization": 5,
+   "holyShield": 1,
+   "improvedHolyShield": 2,
+   "combatExpertise": 5,
+   "avengersShield": 1,
+   "benediction": 5,
+   "improvedJudgement": 2,
+   "deflection": 5,
+   "pursuitOfJustice": 3,
+   "crusade": 3
+  },
+  "buffs": {
+   "brill": 1,
+   "motw": 2,
+   "fort": 1,
+   "wrathair": 1,
+   "manaspring": 1,
+   "kings": 1,
+   "wisdom": 2,
+   "might": 2
+  },
+  "cons": {
+   "flask": "Flask of Blinding Light",
+   "food": "Blackened Basilisk"
+  },
+  "abil": {
+   "rf": true
+  },
+  "expect": {
+   "str": 155.10000000000002,
+   "agi": 106.7,
+   "sta": 1496.7942,
+   "int": 299.20000000000005,
+   "spi": 138.60000000000002,
+   "sp": 929.0,
+   "heal": 672.0,
+   "arcsp": 80.0,
+   "firesp": 0.0,
+   "frostsp": 0.0,
+   "holysp": 80.0,
+   "natsp": 80.0,
+   "shadsp": 0.0,
+   "mp5": 100.0,
+   "shit": 132.72,
+   "scrit": 356.9092,
+   "shaste": 0.0,
+   "spen": 0.0,
+   "ap": 764.2,
+   "hit": 88.31,
+   "crit": 108.58743999999999,
+   "haste": 0.0,
+   "arp": 0.0,
+   "exp": 19.7,
+   "mana": 7161.000000000001,
+   "energy": 0.0,
+   "rage": 0.0,
+   "armor": 19508.800000000003,
+   "rap": 264.0,
+   "def": 377.308,
+   "block": 77.0,
+   "bv": 304.0,
+   "dodge": 340.06380579999995,
+   "parry": 148.269,
+   "res": 0.0,
+   "hp": 18314.942000000003,
+   "arcres": 5.0,
+   "fireres": 5.0,
+   "frostres": 5.0,
+   "natres": 5.0,
+   "shadres": 5.0,
+   "fap": 0.0
+  }
+ }
+]

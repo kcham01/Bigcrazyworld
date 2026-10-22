@@ -25,18 +25,30 @@ It covers protection warriors, protection paladins and feral druids, with every 
 
 ## What it does
 
-- **Character pane.** All 17 equipment slots around your character, with item quality colours and Wowhead-style tooltips: sockets, socket bonuses, set bonuses, enchants, item level, where it drops and a link to Wowhead.
-- **Gear, gems and enchants.** Search every item your class can wear, filter by phase and armor type, and sort by how much avoidance each one adds. Gems show whether they match the socket; meta gems show whether their requirement is met.
+- **Character pane.** All 17 equipment slots around your character, with item quality colours and Wowhead-style tooltips: sockets, socket bonuses, set bonuses, enchants, item level, required level, where it drops and a link to Wowhead. Stat panels for base stats, defenses, melee, ranged (warriors) and spells (paladins and druids).
+- **Every TBC item.** All 14,000+ items a warrior, paladin or druid can wear, from level 1 greens to Sunwell epics. Filter by phase, required level and armor type, search by name or boss, and sort by how much avoidance each one adds. Set bonuses that give stats (Malorne's 1400 armor in bear form, PvP set resilience) count.
+- **Gems and enchants.** Every gem for a socket (matching colours first) and every enchant, armor kit and arcanum for a slot. Enchants that can't go on an item stay in the list with the reason, such as "Requires a level 35 or higher item (this one is level 13)" or "Two-handed weapons only", plus the profession and reputation they need.
 - **Talents.** The three trees as in the game, with the 61-point limit, rows unlocked every 5 points and prerequisite arrows.
-- **Buffs.** Raid buffs (with their improved talents), flasks, elixirs and food, following the game's flask and elixir rules. Holy Shield, Shield Block, Redoubt, Dire Bear Form and on-use trinkets can be switched on and off.
-- **Caps.** Your total against the 102.4% crush cap with gear only, with your block cooldown, and with procs. It also shows:
+- **Buffs.** Searchable drop-downs with every flask, battle elixir, guardian elixir, food, scroll and potion (a flask closes the elixir slots). Raid buffs, boss debuffs and world buffs as icon grids grouped by class: tap for on, tap again for the talented version, hold for details. Your stances and cooldowns and on-use trinkets switch on and off.
+- **The fight.** Pick the boss from 66 TBC raid bosses: its level, swing speed, two-weapon attacks, hit size and abilities (with Wowhead links) come from the cmangos TBC server data.
+- **Caps.** Your total against the crush cap with gear only, with your block cooldown, and with procs, for the boss you picked (and any "chance to hit" debuffs on it). It also shows:
   - the boss's attack table as a bar;
+  - the damage you take: hit sizes after armor, blocks, crushes and crits, damage per second, effective health and hits to kill you;
   - the crit cap;
   - Illidan's Shear;
   - how much of each stat would close the gap;
-  - where every percent comes from.
-- **Block charges.** A simulation of a boss (and adds, if you want) swinging at you while you press Holy Shield or Shield Block on cooldown. It shows whether the charges really cover you or run out.
-- **Alts.** Save as many characters as you like, each with its own gear, talents, race and buffs. Copy, rename or delete them, and share them as a text code.
+  - where every percent, point of armor and block value comes from.
+- **Block charges.** A simulation of the boss (two weapons and adds included) swinging at you while you press Holy Shield or Shield Block on cooldown. It shows whether the charges really cover you or run out.
+- **Alts.** Save as many characters as you like, each with its own gear, talents, race, buffs, consumables and boss. Copy, rename or delete them, and share them as a text code.
+
+## Checked against known numbers
+
+Every build runs the engine against:
+
+- the three wowsims/tbc reference tanks (Tauren feral druid, Orc protection warrior, Blood Elf protection paladin), rebuilt item by item: strength, agility, stamina, intellect, health, armor, defense, dodge, parry, block and attack power all match wowsims' results;
+- the in-game values for naked Tauren and Night Elf druids (health, melee crit, spell crit);
+- block value as the game server works it out (cmangos: shield and gear + Strength / 20 − 1, times talents, rounded down, for every class with a shield);
+- known item, gem, enchant, flask and food stats, and the attack table, crit cap and Shear cap rules.
 
 ## Install
 
@@ -68,8 +80,9 @@ GPL-3.0-or-later. See [LICENSE](LICENSE).
 
 | Software / data | Used for | Licence |
 | --- | --- | --- |
-| [wowsims/tbc](https://github.com/wowsims/tbc) | Items, gems, enchants, base stats, talent layout | MIT |
+| [wowsims/tbc](https://github.com/wowsims/tbc) | Item tooltips, gems, enchants, base stats, talent layout, reference characters for the tests | MIT |
 | [oppahansi/ltc](https://github.com/oppahansi/ltc) | Talent names, descriptions and icons | GPL-3.0 |
+| [cmangos tbc-db](https://github.com/cmangos/tbc-db), [mangos-tbc](https://github.com/cmangos/mangos-tbc) | Every item, consumable and elixir type; boss levels, swing speeds and damage; boss ability ids; the block value formula | GPL-2.0 |
 | [Wowhead](https://www.wowhead.com/tbc) | Item icons and item links | Linked, not copied |
 | [Cinzel](https://fonts.google.com/specimen/Cinzel), [Inter](https://rsms.me/inter/) | Fonts | SIL OFL 1.1 |
 | [esbuild](https://esbuild.github.io/), [TypeScript](https://www.typescriptlang.org/) | Building the app | MIT, Apache-2.0 |

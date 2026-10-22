@@ -1,15 +1,24 @@
 // Saved characters, kept on the phone (localStorage), plus export / import as a text code.
-import { BASES, ClassId, ITEMS, canUse, SLOTS, Slot, TALENTS } from './data';
+import { BASES, ClassId, CONSUMABLES, ENCHANT_ALIAS, ITEMS, canUse, SLOTS, Slot, TALENTS } from './data';
 import { Profile } from './engine';
 
 const KEY = 'tbcc.profiles.v1';
 const CUR = 'tbcc.current.v1';
+export const PROFILE_VERSION = 2;
+
+const consId = (name: string) => CONSUMABLES.find(c => c.n === name)?.id;
+
+export function defaultAbilities(cls: ClassId): Record<string, boolean> {
+  if (cls === 'warrior') return { defstance: true, shieldBlock: true };
+  if (cls === 'paladin') return { rf: true, holyShield: true };
+  return { bear: true };
+}
 
 export function newProfile(cls: ClassId, race: string, name: string): Profile {
   return {
-    id: Math.random().toString(36).slice(2, 10), name, cls, race, gear: {}, talents: {},
-    buffs: {},
-    opts: { holyShield: true, shieldBlock: true, redoubt: false, bear: cls === 'druid', uses: {}, swing: 2.0, dualWield: false },
+    v: PROFILE_VERSION, id: Math.random().toString(36).slice(2, 10), name, cls, race, gear: {}, talents: {},
+    buffs: {}, cons: {}, abil: defaultAbilities(cls),
+    opts: { uses: {}, swing: 2.0, adds: 0 },
     updated: Date.now(),
   };
 }
@@ -30,16 +39,41 @@ export function saveAll(list: Profile[]) {
 export function loadCurrentId(): string | null { try { return localStorage.getItem(CUR); } catch { return null; } }
 export function saveCurrentId(id: string) { try { localStorage.setItem(CUR, id); } catch { /* ignore */ } }
 
-function fixup(p: Profile): Profile {
-  const defaults: Profile['opts'] = { holyShield: true, shieldBlock: true, redoubt: false, bear: p.cls === 'druid', uses: {}, swing: 2, dualWield: false };
-  p.opts = Object.assign(defaults, p.opts || {});
-  p.buffs ||= {}; p.talents ||= {}; p.gear ||= {};
-  if (!BASES[p.cls][p.race]) p.race = Object.keys(BASES[p.cls])[0];
-  return p;
+/** brings characters saved by older versions up to date */
+export function fixup(p: any): Profile {
+  if (!p.v || p.v < 2) {
+    // version 1: consumables were buff ids, cooldowns were options, enchants were wowsims ids
+    const old = p.buffs || {};
+    const cons: any = {};
+    const map: Record<string, [string, string]> = {
+      flaskfort: ['flask', 'Flask of Fortification'], flaskchrom: ['flask', 'Flask of Chromatic Wonder'],
+      majoragi: ['battle', 'Elixir of Major Agility'], mastery: ['battle', 'Elixir of Mastery'],
+      majordef: ['guardian', 'Elixir of Major Defense'], ironskin: ['guardian', 'Elixir of Ironskin'], majorfort: ['guardian', 'Elixir of Major Fortitude'],
+      foodsta: ['food', "Fisherman's Feast"], foodagi: ['food', 'Warp Burger'],
+    };
+    const buffs: Record<string, number> = {};
+    for (const k in old) {
+      if (map[k]) { const id = consId(map[k][1]); if (id) cons[map[k][0]] = id; }
+      else buffs[k] = old[k];
+    }
+    p.buffs = buffs;
+    p.cons = cons;
+    const o = p.opts || {};
+    p.abil = { ...defaultAbilities(p.cls), holyShield: o.holyShield !== false, shieldBlock: o.shieldBlock !== false, redoubt: !!o.redoubt, bear: p.cls === 'druid' ? o.bear !== false : false };
+    for (const s in p.gear || {}) {
+      const g = p.gear[s];
+      if (g && g.ench) g.ench = ENCHANT_ALIAS[g.ench] || undefined;
+    }
+    p.v = PROFILE_VERSION;
+  }
+  p.opts = { uses: {}, swing: 2, adds: 0, ...(p.opts || {}) };
+  p.buffs ||= {}; p.talents ||= {}; p.gear ||= {}; p.cons ||= {}; p.abil ||= defaultAbilities(p.cls);
+  if (!BASES[p.cls as ClassId][p.race]) p.race = Object.keys(BASES[p.cls as ClassId])[0];
+  return p as Profile;
 }
 
 export function exportCode(p: Profile): string {
-  const json = JSON.stringify({ v: 1, ...p, id: undefined });
+  const json = JSON.stringify({ ...p, id: undefined });
   return 'TBCC1:' + btoa(unescape(encodeURIComponent(json)));
 }
 export function importCode(code: string): Profile | null {
@@ -64,6 +98,13 @@ function build(cls: ClassId, spec: Record<number, Record<string, number>>): Reco
   return out;
 }
 
+/** a typical raid: Kings, Mark, Fortitude, Devotion, Flask of Fortification and Fisherman's Feast */
+export function raidSetup(p: Profile) {
+  p.buffs = { kings: 1, motw: 2, fort: 2, devo: 1 };
+  p.cons = { flask: consId('Flask of Fortification'), food: consId("Fisherman's Feast") };
+  if (p.cls === 'warrior') p.buffs.cshout = 1;
+}
+
 /** example characters so the app opens with something on it (clearly named as examples) */
 function examples(): Profile[] {
   const pal = newProfile('paladin', 'human', 'Example Paladin');
@@ -74,7 +115,7 @@ function examples(): Profile[] {
       holyShield: 1, improvedHolyShield: 2, ardentDefender: 5, combatExpertise: 5, avengersShield: 1 },
   });
   pal.gear = autoGear(pal, 1);
-  pal.buffs = { kings: 1, motw: 1, fort: 1, flaskfort: 1, foodsta: 1 };
+  raidSetup(pal);
 
   const war = newProfile('warrior', 'human', 'Example Warrior');
   war.talents = build('warrior', {
@@ -84,7 +125,7 @@ function examples(): Profile[] {
       improvedDefensiveStance: 3, shieldSlam: 1, focusedRage: 3, vitality: 5, devastate: 1 },
   });
   war.gear = autoGear(war, 1);
-  war.buffs = { kings: 1, motw: 1, fort: 1, cshout: 1, flaskfort: 1, foodsta: 1 };
+  raidSetup(war);
 
   const dru = newProfile('druid', 'tauren', 'Example Bear');
   dru.talents = build('druid', {
@@ -94,22 +135,23 @@ function examples(): Profile[] {
     2: { improvedMarkOfTheWild: 5, furor: 5, naturalist: 5 },
   });
   dru.gear = autoGear(dru, 1);
-  dru.buffs = { kings: 1, motw: 1, fort: 1, flaskfort: 1, foodsta: 1 };
+  raidSetup(dru);
   return [pal, war, dru];
 }
 
-/** picks the best avoidance item per slot from a phase, used only for the example characters */
+/** picks the best avoidance item per slot from a phase (level 70 gear only), used for new and example characters */
 export function autoGear(p: Profile, phase: number): Profile['gear'] {
   const gear: Profile['gear'] = {};
   const used = new Set<number>();
-  const score = (st: Record<string, number>) => (st.def || 0) * 0.07 + (st.dodge || 0) * 0.053 + (st.parry || 0) * 0.042 + (st.block || 0) * (p.cls === 'druid' ? 0 : 0.127)
-    + (st.agi || 0) * (p.cls === 'druid' ? 0.07 : 0.035) + (st.sta || 0) * 0.03 + (st.armor || 0) * (p.cls === 'druid' ? 0.004 : 0.0005);
+  const druid = p.cls === 'druid';
+  const score = (st: Record<string, number>) => (st.def || 0) * 0.07 + (st.dodge || 0) * 0.053 + (st.parry || 0) * 0.042 + (st.block || 0) * (druid ? 0 : 0.127)
+    + (st.agi || 0) * (druid ? 0.07 : 0.035) + (st.sta || 0) * 0.03 + (st.armor || 0) * (druid ? 0.004 : 0.0005);
   for (const s of SLOTS) {
     const slot = s.id as Slot;
-    if (slot === 'offhand' && p.cls === 'druid') continue;
-    const pool = ITEMS.filter(it => it.s === s.item && it.ph <= phase && it.q >= 3 && canUse(p.cls, it, slot)
-      && (slot !== 'offhand' || it.wt === 'shield') && (slot !== 'mainhand' || (p.cls === 'druid' ? it.ht === '2h' : it.ht !== '2h'))
-      && (!it.at || it.at === (p.cls === 'druid' ? 'leather' : 'plate') || !['head', 'shoulder', 'chest', 'wrist', 'hands', 'waist', 'legs', 'feet'].includes(it.s))
+    if (slot === 'offhand' && druid) continue;
+    const pool = ITEMS.filter(it => it.s === s.item && Math.max(1, it.ph) <= phase && it.q >= 3 && (it.rl || 0) >= 68 && canUse(p.cls, it, slot)
+      && (slot !== 'offhand' || it.wt === 'shield') && (slot !== 'mainhand' || (druid ? it.ht === '2h' : it.ht !== '2h'))
+      && (!it.at || it.at === (druid ? 'leather' : 'plate') || !['head', 'shoulder', 'chest', 'wrist', 'hands', 'waist', 'legs', 'feet'].includes(it.s))
       && !(it.u && used.has(it.id)));
     pool.sort((a, b) => score(b.st) - score(a.st));
     const best = pool[0];

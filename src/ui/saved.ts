@@ -1,8 +1,8 @@
 // The Saved screen: your characters (alts), new / copy / rename / delete, and sharing a character
 // as a text code.
 import { BASES, CLASSES, ClassId, RACE_ICON, RACE_NAMES } from '../data';
-import { BOSS, Profile, verdict } from '../engine';
-import { autoGear, exportCode, importCode, newProfile } from '../store';
+import { Profile, verdict } from '../engine';
+import { autoGear, exportCode, importCode, newProfile, raidSetup } from '../store';
 import { mainMode } from './character';
 import { clear, h, icon, pct } from './dom';
 import { confirmSheet, openSheet, toast } from './sheets';
@@ -22,7 +22,7 @@ export function savedView(): HTMLElement {
       h('div', { class: 'info' },
         h('div', { class: 'n', style: { color: classOf(p).color } }, p.name),
         h('div', { class: 'd' }, `${describe(p)} · ${specText(p)}`),
-        h('div', { class: 'd', style: { color: v.uncrushable ? '#1eff00' : '#ff5a4a' } }, `${pct(v.total)} ${v.uncrushable ? 'uncrushable' : `(${pct(BOSS.cap - v.total)} short)`}`)),
+        h('div', { class: 'd', style: { color: v.uncrushable ? '#1eff00' : '#ff5a4a' } }, `${pct(v.total)} ${v.uncrushable ? 'uncrushable' : `(${pct(v.short)} short)`}`)),
       h('button', { class: 'btn dark small', onclick: (e: Event) => { e.stopPropagation(); openManage(p); } }, '···')));
   }
   box.appendChild(h('div', { class: 'row', style: { justifyContent: 'center', marginTop: '10px' } },
@@ -32,7 +32,7 @@ export function savedView(): HTMLElement {
 
   root.appendChild(h('div', { class: 'frame rock' }, h('div', { class: 'title' }, 'About'),
     h('p', { class: 'note' }, `TBCrushCalc ${APP_VERSION}. A gear planner and crush / crit cap calculator for Burning Crusade tanks.`),
-    h('p', { class: 'note' }, 'Item, gem, enchant and talent data from the wowsims/tbc and oppahansi/ltc projects. Item icons and links from Wowhead. Characters are saved on this phone only.'),
+    h('p', { class: 'note' }, 'Item, gem, enchant, consumable and talent data from the wowsims/tbc, cmangos and oppahansi/ltc projects; boss data from the cmangos TBC server. Item icons and links from Wowhead. Characters are saved on this phone only.'),
     h('p', { class: 'note' }, 'World of Warcraft and The Burning Crusade are trademarks of Blizzard Entertainment. This app is not made or endorsed by Blizzard.')));
   return root;
 }
@@ -63,7 +63,7 @@ function openNew() {
       h('button', { class: 'btn', onclick: () => {
         const p = newProfile(cls, race, name.value.trim() || `${RACE_NAMES[race]} ${CLASSES.find(c => c.id === cls)!.name}`);
         if (gear) p.gear = autoGear(p, 1);
-        p.buffs = { kings: 1, motw: 1, fort: 1, flaskfort: 1, foodsta: 1 };
+        raidSetup(p);
         sh.close(); addProfile(p); S.tab = 'talents'; commit(); toast('Now spend your talent points');
       } }, 'Create')));
   };

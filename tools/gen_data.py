@@ -1,21 +1,39 @@
 #!/usr/bin/env python3
-"""Builds the game data the app ships with (src/data/*.json and web/talents/*.png).
+"""Builds the game data the app ships with.
 
-Sources (not stored in this repo, pass their folders as arguments):
-  wowsims/tbc  (MIT)   item, gem and enchant stats, item tooltips from Wowhead, talent tree layouts,
-                       race and class base stats
-  oppahansi/ltc (GPL-3) talent names, rank descriptions and talent icons
+  python3 tools/gen_data.py <wowsims-tbc> <ltc> <cmangos tbc-db dump .sql> <mangos-tbc>
 
-  python3 tools/gen_data.py <wowsims-tbc folder> <ltc folder>
+Sources (not stored in this repo):
+  wowsims/tbc   (MIT)    Wowhead's tooltips for every TBC item (assets/item_data), item/gem/enchant stats used to
+                          check the tooltip parser, race and class base stats, talent tree layouts
+  oppahansi/ltc (GPL-3)  talent names, rank descriptions and talent icons
+  cmangos tbc-db (GPL-2) item classes for consumables, the battle/guardian/flask table (spell_elixir),
+                          creature data for raid bosses (level, swing timer, damage)
+  cmangos mangos-tbc (GPL-2) boss scripts, for the spell ids of boss abilities
+
+Writes web/data/{items,gems,enchants,consumables,bosses}.json (loaded by the app at start) and
+src/data/{bases,talents}.json (bundled), plus web/talents/*.jpg.
 """
-import csv, html, json, os, re, sys
+import json
+import os
+import re
+import sys
 
-csv.field_size_limit(1 << 30)
-SIMS, LTC = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import tbcparse as P  # noqa: E402
+import sqlrows        # noqa: E402
+
+SIMS, LTC, SQL, MANGOS = sys.argv[1:5]
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, 'src', 'data')
-os.makedirs(OUT, exist_ok=True)
+WEB = os.path.join(ROOT, 'web', 'data')
+SRC = os.path.join(ROOT, 'src', 'data')
+os.makedirs(WEB, exist_ok=True)
+os.makedirs(SRC, exist_ok=True)
+JUNK = re.compile(r'^(?:Monster - |QA|Test |TEST |\[PH\]|Deprecated|zz|OLD|Unused|NPC Equip)|\bTEST\b|\(test\)', re.I)
 
+tips = P.load_tooltips(os.path.join(SIMS, 'assets/item_data/all_item_tooltips.csv'))
+
+# ================================================================== wowsims structured data (for checks and merges)
 STAT_KEYS = {
     'Strength': 'str', 'Agility': 'agi', 'Stamina': 'sta', 'Intellect': 'int', 'Spirit': 'spi',
     'SpellPower': 'sp', 'HealingPower': 'heal', 'MP5': 'mp5', 'SpellHit': 'shit', 'SpellCrit': 'scrit',
@@ -28,15 +46,9 @@ STAT_KEYS = {
     'Mana': 'mana', 'ArcaneSpellPower': 'arcsp', 'FireSpellPower': 'firesp', 'FrostSpellPower': 'frostsp',
     'HolySpellPower': 'holysp', 'NatureSpellPower': 'natsp', 'ShadowSpellPower': 'shadsp',
 }
-SLOT = {'Head': 'head', 'Neck': 'neck', 'Shoulder': 'shoulder', 'Back': 'back', 'Chest': 'chest',
-        'Wrist': 'wrist', 'Hands': 'hands', 'Waist': 'waist', 'Legs': 'legs', 'Feet': 'feet',
-        'Finger': 'finger', 'Trinket': 'trinket', 'Weapon': 'weapon', 'Ranged': 'ranged'}
-CLASS = {'Warrior': 'warrior', 'Paladin': 'paladin', 'Druid': 'druid', 'Hunter': 'hunter', 'Rogue': 'rogue',
-         'Priest': 'priest', 'Shaman': 'shaman', 'Mage': 'mage', 'Warlock': 'warlock'}
-TANKS = {'warrior', 'paladin', 'druid'}
 
 
-def parse_stats(s):
+def ws_stats(s):
     out = {}
     for name, val in re.findall(r'stats\.(\w+):\s*(-?[\d.]+)', s or ''):
         k = STAT_KEYS.get(name)
@@ -46,113 +58,28 @@ def parse_stats(s):
     return out
 
 
-def field(line, name):
-    m = re.search(name + r':\s*("(?:[^"\\]|\\.)*"|[^,}]+(?:\{[^}]*\})?)', line)
-    if not m:
-        return None
-    v = m.group(1).strip()
-    if v.startswith('"'):
-        return json.loads(v)
-    return v
-
-
-def block(line, name):
+def ws_block(line, name):
     m = re.search(name + r':\s*stats\.Stats\{([^}]*)\}', line)
     return m.group(1) if m else ''
 
 
-def enum_tail(v, prefix):
-    if not v:
-        return None
-    m = re.search(prefix + r'(\w+)', v)
-    return m.group(1) if m else None
+ws_items = {}
+for line in open(os.path.join(SIMS, 'sim/core/items/all_items.go')).read().splitlines():
+    line = line.strip()
+    if line.startswith('{Name:'):
+        m = re.search(r'\bID:\s*(\d+)', line)
+        ph = re.search(r'Phase:\s*(\d+)', line)
+        ws_items[int(m.group(1))] = {'st': ws_stats(ws_block(line, 'Stats')), 'ph': int(ph.group(1)) if ph else None}
 
-
-# ---------------------------------------------------------------- tooltips
-tips = {}
-with open(os.path.join(SIMS, 'assets/item_data/all_item_tooltips.csv'), encoding='utf-8') as f:
-    next(f)
-    for row in f:
-        parts = row.rstrip('\n').split(',', 2)
-        if len(parts) < 3:
-            continue
-        try:
-            tips[int(parts[0])] = json.loads(parts[2])
-        except Exception:
-            pass
-
-
-def clean(s):
-    s = re.sub(r'<[^>]+>', '', s)
-    return html.unescape(s).replace('\xa0', ' ').strip()
-
-
-def parse_tooltip(t):
-    """Wowhead's tooltip HTML -> a list of [style, text] lines plus a few structured bits."""
-    h = t.get('tooltip', '')
-    info = {}
-    m = re.search(r'Dropped by: ([^<]+)', h)
-    if m:
-        info['drop'] = html.unescape(m.group(1)).strip()
-    m = re.search(r'Drop Chance: ([\d.]+%)', h)
-    if m:
-        info['chance'] = m.group(1)
-    # set: name, pieces, bonuses
-    m = re.search(r'<a href="/item-set=(\d+)" class="q">([^<]+)</a> \(0/(\d+)\)', h)
-    if m:
-        info['setId'] = int(m.group(1))
-        info['setName'] = html.unescape(m.group(2))
-        info['setPieces'] = [int(x) for x in re.findall(r'<!--si(\d+)-->', h)]
-        info['setBonus'] = [[int(n), clean(txt)] for n, txt in re.findall(r'\((\d+)\) Set\s*:\s*(.*?)</span>', h, re.S)]
-        h = h[:h.index(m.group(0))]  # set listing is rendered separately
-    h = re.sub(r'<div class="whtt-sellprice">.*?</div>', '', h, flags=re.S)
-    h = re.sub(r'<div class="whtt-extra[^"]*">.*?</div>', '', h, flags=re.S)
-    h = re.sub(r'<th><b class="q0 whtt-extra">[^<]*</b></th>', '', h)
-    h = re.sub(r'<!--.*?-->', '', h, flags=re.S)
-    # left/right rows (slot | type, damage | speed)
-    def lr(mm):
-        return '<br>@@LR@@' + clean(mm.group(1)) + '||' + clean(mm.group(2)) + '<br>'
-    h = re.sub(r'<table width="100%"><tr>\s*<td>(.*?)</td>\s*<th>(.*?)</th>\s*</tr></table>', lr, h, flags=re.S)
-    h = re.sub(r'<a href="/items/gems[^"]*" class="socket-(\w+) q0">[^<]*</a>', r'<br>@@SOCK@@\1<br>', h)
-    parts = re.split(r'<br\s*/?>|</?div[^>]*>|</?table[^>]*>|</?tr>|</?td>', h)
-    lines = []
-    first = True
-    for p in parts:
-        if '@@LR@@' in p:
-            a, b = p.split('@@LR@@', 1)[1].split('||', 1)
-            lines.append(['lr', a, b])
-            continue
-        if '@@SOCK@@' in p:
-            lines.append(['sock', p.split('@@SOCK@@', 1)[1].strip()])
-            continue
-        cls = 'w'
-        if 'class="q2"' in p:
-            cls = 'g'
-        elif 'class="q0' in p:
-            cls = 'q0'
-        elif re.search(r'class="q"', p):
-            cls = 'y'
-        txt = clean(p)
-        if not txt:
-            continue
-        if first and txt == t.get('name'):
-            first = False
-            continue
-        first = False
-        if txt.startswith('Item Level') or txt.startswith('Durability') or txt.startswith('Sell Price') or txt.startswith('Phase '):
-            continue
-        if txt.startswith('Classes:'):
-            cls = 'w'
-        lines.append([cls, txt])
-    info['lines'] = lines
-    return info
-
-
-# on-use / proc effects a tank cares about, read from the green lines
+# ================================================================== items
 USE_RE = re.compile(r'^(Use|Equip|Chance on hit): .*?(?:Increases|increases|Increases your) ?(?:your )?(dodge rating|defense rating|block rating|shield block rating|parry rating|armor|agility|stamina|block value|maximum health|resilience rating)(?: of your shield)? by (\d+)(?: for (\d+) sec)?', re.I)
+FX_KEY = {'dodge rating': 'dodge', 'defense rating': 'def', 'block rating': 'block', 'shield block rating': 'block',
+          'parry rating': 'parry', 'armor': 'armor', 'agility': 'agi', 'stamina': 'sta', 'block value': 'bv',
+          'maximum health': 'hp', 'resilience rating': 'res'}
 
 
 def effects(lines):
+    """On-use and proc effects a tank cares about, from the green tooltip lines."""
     out = []
     for l in lines:
         if l[0] != 'g':
@@ -164,11 +91,8 @@ def effects(lines):
         if not m:
             continue
         kind, stat, amt, dur = m.group(1), m.group(2).lower(), int(m.group(3)), m.group(4)
-        key = {'dodge rating': 'dodge', 'defense rating': 'def', 'block rating': 'block', 'shield block rating': 'block',
-               'parry rating': 'parry', 'armor': 'armor', 'agility': 'agi', 'stamina': 'sta', 'block value': 'bv',
-               'maximum health': 'hp', 'resilience rating': 'res'}[stat]
         cd = re.search(r'\((\d+) (Min|Sec)s? Cooldown\)', t)
-        e = {'kind': 'use' if kind == 'Use' else 'proc', 'stat': key, 'amount': amt}
+        e = {'kind': 'use' if kind == 'Use' else 'proc', 'stat': FX_KEY[stat], 'amount': amt}
         if dur:
             e['dur'] = int(dur)
         if cd:
@@ -178,66 +102,6 @@ def effects(lines):
     return out
 
 
-# ---------------------------------------------------------------- items
-items = []
-src = open(os.path.join(SIMS, 'sim/core/items/all_items.go')).read()
-for line in src.splitlines():
-    line = line.strip()
-    if not line.startswith('{Name:'):
-        continue
-    iid = int(field(line, 'ID'))
-    allow = [CLASS[c] for c in re.findall(r'Class_Class(\w+)', re.search(r'ClassAllowlist: \[\]proto.Class\{([^}]*)\}', line).group(1))] if 'ClassAllowlist' in line else None
-    if allow and not (set(allow) & TANKS):
-        continue
-    typ = SLOT[enum_tail(field(line, 'Type'), 'ItemType_ItemType')]
-    rtype = enum_tail(field(line, 'RangedWeaponType'), 'RangedWeaponType_RangedWeaponType')
-    if rtype in ('Wand', 'Totem'):
-        continue
-    it = {
-        'id': iid, 'n': field(line, 'Name'), 's': typ,
-        'q': {'Junk': 0, 'Common': 1, 'Uncommon': 2, 'Rare': 3, 'Epic': 4, 'Legendary': 5, 'Artifact': 6}[enum_tail(field(line, 'Quality'), 'ItemQuality_ItemQuality')],
-        'il': int(field(line, 'Ilvl') or 0), 'ph': int(field(line, 'Phase') or 0),
-        'st': parse_stats(block(line, 'Stats')),
-    }
-    at = enum_tail(field(line, 'ArmorType'), 'ArmorType_ArmorType')
-    if at:
-        it['at'] = at.lower()
-    wt = enum_tail(field(line, 'WeaponType'), 'WeaponType_WeaponType')
-    if wt:
-        it['wt'] = wt.lower()
-    ht = enum_tail(field(line, 'HandType'), 'HandType_HandType')
-    if ht:
-        it['ht'] = {'MainHand': 'mh', 'OffHand': 'oh', 'OneHand': '1h', 'TwoHand': '2h'}[ht]
-    if rtype:
-        it['rt'] = rtype.lower()
-    if 'Unique: true' in line:
-        it['u'] = 1
-    if allow:
-        it['cl'] = allow
-    socks = re.search(r'GemSockets: \[\]proto.GemColor\{([^}]*)\}', line)
-    if socks:
-        it['so'] = [c.lower() for c in re.findall(r'GemColor_GemColor(\w+)', socks.group(1))]
-    sb = parse_stats(block(line, 'SocketBonus'))
-    if sb:
-        it['sb'] = sb
-    dmin, dmax, spd = field(line, 'WeaponDamageMin'), field(line, 'WeaponDamageMax'), field(line, 'SwingSpeed')
-    if dmin:
-        it['dmg'] = [float(dmin), float(dmax), float(spd)]
-    t = tips.get(iid)
-    if t:
-        it['ic'] = t.get('icon', '')
-        tt = parse_tooltip(t)
-        it['tt'] = tt['lines']
-        for k in ('drop', 'chance', 'setId', 'setName', 'setPieces', 'setBonus'):
-            if k in tt:
-                it[k] = tt[k]
-        fx = effects(tt['lines'])
-        if fx:
-            it['fx'] = fx
-    else:
-        it['ic'] = ''
-    items.append(it)
-
 FX_OVERRIDES = {
     34473: [{'kind': 'proc', 'stat': 'dodge', 'amount': 152, 'dur': 10, 'cd': 30, 'note': 'when a hit drops you below 35% health'}],
     38289: [{'kind': 'use', 'stat': 'bv', 'amount': 200, 'dur': 20, 'cd': 120}],
@@ -246,191 +110,389 @@ FX_OVERRIDES = {
     30629: [{'kind': 'use', 'stat': 'def', 'amount': 165, 'dur': 15, 'cd': 180}],
     30300: [{'kind': 'use', 'stat': 'block', 'amount': 125, 'dur': 15, 'cd': 90}],
 }
-for it in items:
-    if it['id'] in FX_OVERRIDES:
-        it['fx'] = FX_OVERRIDES[it['id']]
 
-# sets are stored once
-sets = {}
-for it in items:
+eq_ids = {int(x) for x in open(os.path.join(SIMS, 'assets/item_data/all_equippable_item_ids.csv')).read().split()[1:] if x.isdigit()}
+# wowsims' list leaves out most grey, white and green gear; the cmangos item table has every item in the game
+_c, _r = sqlrows.table(SQL, 'item_template')
+_ix = {c: i for i, c in enumerate(_c)}
+for _row in _r:
+    if _row[_ix['class']] in ('2', '4') and _row[_ix['InventoryType']] not in ('0', '4', '18', '19', '24', '27', '28'):
+        eq_ids.add(int(_row[_ix['entry']]))
+eq_ids = sorted(eq_ids)
+items, sets, checks = [], {}, {'compared': 0, 'differ': 0}
+for iid in eq_ids:
+    t = tips.get(iid)
+    if not t or JUNK.search(t.get('name', '')):
+        continue
+    it = P.parse_item(iid, t)
+    if not it:
+        continue
+    ws = ws_items.get(iid)
+    if ws:
+        checks['compared'] += 1
+        # wowsims has the healing values the game uses in 2.4; everything else agrees with the tooltips
+        if 'heal' in ws['st']:
+            it['st']['heal'] = ws['st']['heal']
+        diff = {k for k in set(ws['st']) | set(it['st']) if k not in ('rap', 'heal') and abs(ws['st'].get(k, 0) - it['st'].get(k, 0)) > 0.01}
+        if diff:
+            checks['differ'] += 1
+        if ws['ph']:
+            it['ph'] = ws['ph']
+    fx = FX_OVERRIDES.get(iid) or effects(it['tt'])
+    if fx:
+        it['fx'] = fx
     if 'setId' in it:
-        sid = it['setId']
-        sets[sid] = {'n': it.pop('setName'), 'p': it.pop('setPieces'), 'b': it.pop('setBonus')}
-    else:
-        for k in ('setName', 'setPieces', 'setBonus'):
-            it.pop(k, None)
+        sets[it['setId']] = {'n': it.pop('setName'), 'p': it.pop('setPieces'), 'b': it.pop('setBonus')}
+    for k in ('setName', 'setPieces', 'setBonus'):
+        it.pop(k, None)
+    items.append(it)
+items.sort(key=lambda i: i['id'])
 
-# ---------------------------------------------------------------- gems
+
+def set_bonus_stats(text):
+    """plain stat set bonuses ('+35 Resilience Rating.', 'Increases attack power by 40.') -> stats; conditional ones stay text"""
+    t = text.strip()
+    if re.match(r'^Increases your armor by (\d+) in Bear Form and Dire Bear Form\.?$', t):
+        return {'beararmor': int(re.match(r'^Increases your armor by (\d+)', t).group(1))}
+    if re.match(r'^\+\d+ [A-Za-z ]+\.?$', t):
+        return P.bonus_stats(t)
+    if re.search(r'when|chance|your next|ability|Shout|pet|fighting|against|Form|while|for \d+ sec', t, re.I):
+        return {}
+    st = {}
+    P.green_stats('Equip: ' + t, st)
+    return st
+
+
+BRACKETS = re.compile(r'\[([^\[\]]*)\]\[([^\[\]]*)\]')      # Wowhead's "[Blood][the Martyr]" (Horde/Alliance names)
+
+
+def unbracket(t):
+    return BRACKETS.sub(lambda m: m.group(1) + '/' + m.group(2), t) if isinstance(t, str) else t
+
+
+for it in items:
+    it['tt'] = [[unbracket(x) for x in line] for line in it['tt']]
+for sv in sets.values():
+    sv['b'] = [[n, unbracket(t)] for n, t in sv['b']]
+
+nb = 0
+for sid, sv in sets.items():
+    out = []
+    for n, text in sv['b']:
+        st = set_bonus_stats(text)
+        out.append([n, text, st] if st else [n, text])
+        nb += bool(st)
+    sv['b'] = out
+print('items', len(items), 'sets', len(sets), 'stat set bonuses', nb, 'checked against wowsims', checks)
+
+# ================================================================== gems
 gems = []
-for line in open(os.path.join(SIMS, 'sim/core/items/all_gems.go')).read().splitlines():
-    line = line.strip()
-    if not line.startswith('{Name:'):
-        continue
-    gid = int(field(line, 'ID'))
-    g = {'id': gid, 'n': field(line, 'Name'),
-         'q': {'Uncommon': 2, 'Rare': 3, 'Epic': 4, 'Common': 1}.get(enum_tail(field(line, 'Quality'), 'ItemQuality_ItemQuality'), 2),
-         'c': enum_tail(field(line, 'Color'), 'GemColor_GemColor').lower(), 'ph': int(field(line, 'Phase') or 0),
-         'st': parse_stats(block(line, 'Stats'))}
-    if 'Unique: true' in line:
-        g['u'] = 1
+for gid in [int(x) for x in open(os.path.join(SIMS, 'assets/item_data/all_gem_ids.csv')).read().split()[1:] if x.isdigit()]:
     t = tips.get(gid)
-    if t:
-        g['ic'] = t.get('icon', '')
-        h = t.get('tooltip', '')
-        m = re.search(r'<!--egstats--><!--eistats--><br />(.*?)(?:<!--gemConditions-->|</td>)', h, re.S)
-        if m:
-            g['tx'] = clean(m.group(1))
-        cond = re.findall(r'<div class="q0">(Requires[^<]*)</div>', h)
-        if cond:
-            g['req'] = [html.unescape(c) for c in cond]
-    gems.append(g)
-
-# dedupe gems by name+stats (wowsims has some duplicate ids)
-seen = set()
-gems2 = []
-for g in sorted(gems, key=lambda g: (g['n'], -g['id'])):
-    key = (g['n'], json.dumps(g['st'], sort_keys=True))
-    if key in seen:
+    if not t or JUNK.search(t.get('name', '')):
         continue
-    seen.add(key)
-    gems2.append(g)
-gems = gems2
+    g = P.parse_gem(gid, t)
+    if g:
+        gems.append(g)
+gems.sort(key=lambda g: (g['c'], g['n']))
+print('gems', len(gems))
 
-# ---------------------------------------------------------------- enchants
-enchants = []
+# ================================================================== enchants
+ench = {}
+
+
+def put(e):
+    key = e['n']
+    old = ench.get(key)
+    if old and old['st'] != e['st'] and e['st'] and old['st']:
+        # same name, different effect (the five Lesser Arcanum of Voracity): keep each one
+        ench[key + '#' + json.dumps(e['st'], sort_keys=True)] = e
+        return
+    if old and old.get('src') == 'item' and e.get('src') != 'item':
+        return
+    if old and old.get('rep') and not e.get('rep'):
+        return
+    ench[key] = e
+
+
+for iid, t in sorted(tips.items()):
+    nm = t.get('name', '')
+    if JUNK.search(nm) or 'mount' in nm.lower():
+        continue
+    txt = P.clean(t['tooltip'])
+    use = re.search(r'Use: (.*?)(?:Max Stack|Sell Price|Dropped by|$)', txt)
+    if nm.startswith('Formula: Enchant'):
+        m = re.search(r'(?:Teaches (?:you )?how to|Learn how to) ([^.]*\.)\s*(.*?)(?:Sell Price|$)', txt)
+        if not m:
+            continue
+        body = m.group(2).strip() or ('Permanently ' + m.group(1))
+        name, src = nm.replace('Formula: ', ''), 'formula'
+    elif nm.startswith('Enchant ') and use:
+        body, name, src = use.group(1), nm, 'item'
+    elif use and re.match(r'(?:Permanently|Attaches)', use.group(1)) and not re.search(r'mount|fishing|lure|stealth|spurs', use.group(1), re.I) \
+            and not nm.startswith(('Formula', 'Pattern', 'Plans', 'Schematic', 'Design', 'Recipe', 'Manual')):
+        body, name, src = use.group(1), nm, 'kit'
+    else:
+        continue
+    slots = P.ench_slots(name, body)
+    if not slots:
+        continue
+    req = P.ench_req(body)
+    m = re.search(r'can only be attached to level (\d+) and higher items', body, re.I)
+    if m:
+        req = int(m.group(1))
+    tx = re.sub(r'\s*(?:Requires a level \d+ or higher item|Only us[e]?able on items level \d+ and above|Can only be attached to level \d+ and higher items)\.?', ' ', body)
+    tx = re.sub(r'\s+', ' ', re.sub(r'\.(?=[A-Z])', '. ', tx)).strip()
+    e = {'id': iid, 'n': name, 'sl': slots, 'st': P.ench_stats(tx), 'req': req, 'src': src, 'tx': tx, 'ic': t.get('icon', '')}
+    cl = re.search(r'Classes: (Warrior|Paladin|Druid|Hunter|Rogue|Priest|Shaman|Mage|Warlock)', txt)
+    if cl:
+        e['cl'] = cl.group(1).lower()
+    prof = re.search(r'Requires (Enchanting|Leatherworking|Tailoring|Blacksmithing|Engineering) \((\d+)\)', txt)
+    if prof:
+        e['prof'] = f'{prof.group(1)} ({prof.group(2)})'
+    rep = re.search(r"Requires ([A-Z][\w' ]+?) - (Friendly|Honored|Revered|Exalted)", txt)
+    if rep:
+        e['rep'] = re.sub(r'^Level \d+(?:Requires )?', '', f'{rep.group(1)} - {rep.group(2)}').strip()
+    if re.search(r"only the enchanter's rings", body, re.I):
+        e['prof'] = 'Enchanters only'
+    put(e)
+
+# scopes only go on bows, guns and crossbows; the generic slot table already says 'ranged'
+PROC = {'Enchant Weapon - Executioner', 'Enchant Weapon - Deathfrost', 'Enchant Weapon - Battlemaster', 'Enchant Weapon - Crusader', 'Enchant Weapon - Mongoose', 'Enchant Weapon - Spellsurge',
+        'Enchant Weapon - Fiery Weapon', 'Enchant Weapon - Icy Chill', 'Enchant Weapon - Lifestealing', 'Enchant Weapon - Unholy',
+        'Enchant Weapon - Demonslaying', 'Enchant Weapon - Lesser Beastslayer', 'Enchant Weapon - Lesser Elemental Slayer',
+        'Enchant Weapon - Minor Beastslayer', 'Enchant Ring - Striking'}
+OVERRIDE = {
+    'Enchant Ring - Healing Power': {'heal': 20, 'sp': 7}, 'Arcanum of Focus': {'sp': 8, 'heal': 8},
+    'Power of the Scourge': {'sp': 15, 'heal': 15, 'scrit': 14}, 'Resilience of the Scourge': {'heal': 31, 'sp': 11, 'mp5': 5},
+    'Zandalar Signet of Mojo': {'sp': 18, 'heal': 18}, 'Zandalar Signet of Serenity': {'heal': 33},
+    'Enchant Gloves - Healing Power': {'heal': 30, 'sp': 10}, 'Enchant Weapon - Healing Power': {'heal': 55, 'sp': 19},
+    'Enchant Weapon - Spell Power': {'sp': 30, 'heal': 30}, 'Enchant Gloves - Fire Power': {'firesp': 20},
+    'Enchant Gloves - Frost Power': {'frostsp': 20}, 'Enchant Gloves - Shadow Power': {'shadsp': 20},
+    "Enchant Weapon - Winter's Might": {'frostsp': 7}, 'Enchant Cloak - Lesser Shadow Resistance': {'shadres': 10},
+    'Enchant Chest - Lesser Mana': {'mana': 20}, 'Enchant Chest - Minor Mana': {'mana': 5},
+    'Enchant Shield - Resilience': {'res': 12}, 'Heavy Armor Kit': {'armor': 24}, 'Rugged Armor Kit': {'armor': 40},
+    'Thick Armor Kit': {'armor': 32}, 'Light Armor Kit': {'armor': 8}, 'Medium Armor Kit': {'armor': 16},
+    'Enchant Gloves - Riding Skill': {}, 'Enchant Gloves - Herbalism': {}, 'Enchant Gloves - Mining': {},
+    'Stabilized Eternium Scope': {'rcrit': 28},
+}
+TEXT_FIX = {'Enchant Shield - Resilience': 'Permanently enchant a shield to increase resilience rating by 12.'}
+for n, e in ench.items():
+    if n in PROC:
+        e['st'] = {}
+    if n in OVERRIDE:
+        e['st'] = OVERRIDE[n]
+    if n in TEXT_FIX:
+        e['tx'] = TEXT_FIX[n]
+    if n.startswith('Enchant Ring'):
+        e['req'] = 35
+        e['prof'] = 'Enchanters only'
+
+# enchants the tooltip data leaves out: trainer-taught recipes (no recipe item) and a few TBC ones.
+# (slot, name, stats, item level needed, wowhead spell id or 0, text)
+MANUAL = [
+    ('shield', 'Enchant Shield - Tough Shield', {'bv': 18}, 35, 27944, 'Permanently enchant a shield to increase block value by 18.'),
+    ('chest', 'Enchant Chest - Restore Mana Prime', {'mp5': 6}, 35, 33991, 'Permanently enchant a piece of chest armor to restore 6 mana every 5 seconds.'),
+    # Classic trainer recipes (stats unchanged in TBC)
+    ('wrist', 'Enchant Bracer - Minor Health', {'hp': 5}, 0, 0, ''), ('wrist', 'Enchant Bracer - Minor Stamina', {'sta': 1}, 0, 0, ''),
+    ('wrist', 'Enchant Bracer - Minor Agility', {'agi': 1}, 0, 0, ''), ('wrist', 'Enchant Bracer - Lesser Stamina', {'sta': 3}, 0, 0, ''),
+    ('wrist', 'Enchant Bracer - Lesser Intellect', {'int': 3}, 0, 0, ''), ('wrist', 'Enchant Bracer - Stamina', {'sta': 5}, 0, 0, ''),
+    ('wrist', 'Enchant Bracer - Strength', {'str': 5}, 0, 0, ''), ('wrist', 'Enchant Bracer - Spirit', {'spi': 5}, 0, 0, ''),
+    ('wrist', 'Enchant Bracer - Intellect', {'int': 5}, 0, 0, ''), ('wrist', 'Enchant Bracer - Greater Strength', {'str': 7}, 0, 0, ''),
+    ('chest', 'Enchant Chest - Minor Health', {'hp': 5}, 0, 0, ''), ('chest', 'Enchant Chest - Lesser Health', {'hp': 15}, 0, 0, ''),
+    ('chest', 'Enchant Chest - Health', {'hp': 25}, 0, 0, ''), ('chest', 'Enchant Chest - Greater Health', {'hp': 35}, 0, 0, ''),
+    ('chest', 'Enchant Chest - Superior Health', {'hp': 50}, 0, 0, ''), ('chest', 'Enchant Chest - Mana', {'mana': 30}, 0, 0, ''),
+    ('chest', 'Enchant Chest - Greater Mana', {'mana': 50}, 0, 0, ''), ('chest', 'Enchant Chest - Superior Mana', {'mana': 65}, 0, 0, ''),
+    ('chest', 'Enchant Chest - Minor Stats', {'str': 1, 'agi': 1, 'sta': 1, 'int': 1, 'spi': 1}, 0, 0, ''),
+    ('chest', 'Enchant Chest - Lesser Stats', {'str': 2, 'agi': 2, 'sta': 2, 'int': 2, 'spi': 2}, 0, 0, ''),
+    ('chest', 'Enchant Chest - Stats', {'str': 3, 'agi': 3, 'sta': 3, 'int': 3, 'spi': 3}, 0, 0, ''),
+    ('back', 'Enchant Cloak - Minor Resistance', {'arcres': 1, 'fireres': 1, 'frostres': 1, 'natres': 1, 'shadres': 1}, 0, 0, ''),
+    ('back', 'Enchant Cloak - Minor Protection', {'armor': 10}, 0, 0, ''), ('back', 'Enchant Cloak - Lesser Protection', {'armor': 20}, 0, 0, ''),
+    ('back', 'Enchant Cloak - Lesser Fire Resistance', {'fireres': 5}, 0, 0, ''), ('back', 'Enchant Cloak - Defense', {'armor': 30}, 0, 0, ''),
+    ('back', 'Enchant Cloak - Resistance', {'arcres': 3, 'fireres': 3, 'frostres': 3, 'natres': 3, 'shadres': 3}, 0, 0, ''),
+    ('back', 'Enchant Cloak - Fire Resistance', {'fireres': 7}, 0, 0, ''), ('back', 'Enchant Cloak - Greater Defense', {'armor': 50}, 0, 0, ''),
+    ('feet', 'Enchant Boots - Minor Speed', {}, 0, 0, 'Permanently enchant boots to give a slight movement speed increase.'),
+    ('feet', 'Enchant Boots - Lesser Agility', {'agi': 3}, 0, 0, ''), ('feet', 'Enchant Boots - Lesser Stamina', {'sta': 3}, 0, 0, ''),
+    ('feet', 'Enchant Boots - Stamina', {'sta': 5}, 0, 0, ''), ('feet', 'Enchant Boots - Agility', {'agi': 5}, 0, 0, ''),
+    ('hands', 'Enchant Gloves - Agility', {'agi': 5}, 0, 0, ''), ('hands', 'Enchant Gloves - Strength', {'str': 5}, 0, 0, ''),
+    ('hands', 'Enchant Gloves - Minor Haste', {}, 0, 0, 'Permanently enchant gloves to increase attack speed slightly.'),
+    ('shield', 'Enchant Shield - Minor Stamina', {'sta': 1}, 0, 0, ''), ('shield', 'Enchant Shield - Lesser Stamina', {'sta': 3}, 0, 0, ''),
+    ('shield', 'Enchant Shield - Lesser Spirit', {'spi': 3}, 0, 0, ''), ('shield', 'Enchant Shield - Spirit', {'spi': 5}, 0, 0, ''),
+    ('shield', 'Enchant Shield - Greater Spirit', {'spi': 7}, 0, 0, ''),
+    ('2h', 'Enchant 2H Weapon - Minor Impact', {}, 0, 0, 'Permanently enchant a two-handed melee weapon to do +2 damage.'),
+    ('2h', 'Enchant 2H Weapon - Lesser Impact', {}, 0, 0, 'Permanently enchant a two-handed melee weapon to do +3 damage.'),
+    ('2h', 'Enchant 2H Weapon - Impact', {}, 0, 0, 'Permanently enchant a two-handed melee weapon to do +5 damage.'),
+    ('2h', 'Enchant 2H Weapon - Greater Impact', {}, 0, 0, 'Permanently enchant a two-handed melee weapon to do +7 damage.'),
+    ('weapon', 'Enchant Weapon - Minor Striking', {}, 0, 0, 'Permanently enchant a melee weapon to do 1 additional point of damage.'),
+    ('weapon', 'Enchant Weapon - Lesser Striking', {}, 0, 0, 'Permanently enchant a melee weapon to do 2 additional points of damage.'),
+    ('weapon', 'Enchant Weapon - Striking', {}, 0, 0, 'Permanently enchant a melee weapon to do 3 additional points of damage.'),
+    ('weapon', 'Enchant Weapon - Greater Striking', {}, 0, 0, 'Permanently enchant a melee weapon to do 4 additional points of damage.'),
+]
+STAT_WORDS = {'hp': 'health', 'sta': 'Stamina', 'agi': 'Agility', 'str': 'Strength', 'int': 'Intellect', 'spi': 'Spirit', 'mana': 'mana',
+              'armor': 'armor', 'fireres': 'fire resistance'}
+for slot, name, st, req, spell, text in MANUAL:
+    if name in ench:
+        continue
+    if not text:
+        if len(st) == 5 and 'str' in st:
+            text = f'Permanently increases all stats by {st["str"]}.'
+        elif len(st) == 5:
+            text = f'Permanently increases all resistances by {st["arcres"]}.'
+        else:
+            k, v = next(iter(st.items()))
+            text = f'Permanently increases {STAT_WORDS.get(k, k)} by {v}.'
+    put({'id': spell, **({'spell': 1} if spell else {}), 'n': name, 'sl': [slot], 'st': st, 'req': req, 'src': 'trainer', 'tx': text, 'ic': 'trade_engraving'})
+
+NICE = {'str': 'Strength', 'agi': 'Agility', 'sta': 'Stamina', 'int': 'Intellect', 'spi': 'Spirit'}
+by_base = {}
+for e in ench.values():
+    by_base.setdefault(e['n'], []).append(e)
+for n, group in by_base.items():
+    if len(group) > 1:
+        for e in group:
+            e['n'] = f"{n} ({', '.join(f'+{v} {NICE.get(k, k)}' for k, v in e['st'].items())})"
+enchants = sorted(ench.values(), key=lambda e: (e['sl'][0], e['n']))
+import zlib  # noqa: E402
+for e in enchants:
+    # the app's own enchant key, from the name so it stays the same when the data is rebuilt (ids from different
+    # sources can collide); saved characters store it
+    e['k'] = zlib.crc32(e['n'].encode()) & 0x3fffffff
+assert len({e['k'] for e in enchants}) == len(enchants), 'enchant key collision'
+
+# wowsims' enchant ids -> our keys, so characters saved by earlier versions keep their enchants
+alias = {}
+ws_names = {}
 for line in open(os.path.join(SIMS, 'sim/core/items/all_enchants.go')).read().splitlines():
     line = line.strip()
-    if not line.startswith('{ID:'):
+    if line.startswith('{ID:'):
+        wid = int(re.search(r'\bID:\s*(\d+)', line).group(1))
+        nm = re.search(r'Name:\s*"([^"]+)"', line).group(1)
+        ws_names[wid] = nm
+
+
+def norm(n):
+    n = n.lower()
+    n = re.sub(r'^(chest|bracer|gloves|cloak|boots|shield|weapon|2h weapon|ring) - ', lambda m: 'enchant ' + m.group(1) + ' - ', n)
+    return {'major defense': 'enchant bracer - major defense', 'savagery': 'enchant 2h weapon - savagery',
+            'sunfire': 'enchant weapon - sunfire', 'soulfrost': 'enchant weapon - soulfrost',
+            'deathfrost': 'enchant weapon - deathfrost', 'enchant gloves - major agility': 'enchant gloves - superior agility'}.get(n, n)
+
+
+by_name = {e['n'].lower(): e for e in enchants}
+for wid, nm in ws_names.items():
+    e = by_name.get(norm(nm))
+    if e:
+        alias[wid] = e['k']
+    else:
+        print('  no enchant for wowsims', wid, nm)
+print('enchants', len(enchants), 'aliases', len(alias))
+
+# ================================================================== consumables (cmangos item classes + tooltips)
+cols, rows = sqlrows.table(SQL, 'item_template')
+ix = {c: i for i, c in enumerate(cols)}
+_, el = sqlrows.table(SQL, 'spell_elixir')
+elix = {int(r[0]): int(r[1]) for r in el}
+cons = {}
+for r in rows:
+    if r[ix['class']] != '0':
         continue
-    eid = int(field(line, 'ID'))
-    allow = [CLASS[c] for c in re.findall(r'Class_Class(\w+)', re.search(r'ClassAllowlist: \[\]proto.Class\{([^}]*)\}', line).group(1))] if 'ClassAllowlist' in line else None
-    if allow and not (set(allow) & TANKS):
+    sub, sp, iid = int(r[ix['subclass']]), int(r[ix['spellid_1']]), int(r[ix['entry']])
+    t = tips.get(iid)
+    if not t or JUNK.search(t.get('name', '')) or t.get('name', '').startswith('Flaskataur'):   # unreleased test flasks
         continue
-    e = {'id': eid, 'eff': int(field(line, 'EffectID')), 'n': field(line, 'Name'),
-         's': SLOT.get(enum_tail(field(line, 'ItemType'), 'ItemType_ItemType'), ''),
-         'q': {'Common': 1, 'Uncommon': 2, 'Rare': 3, 'Epic': 4}.get(enum_tail(field(line, 'Quality'), 'ItemQuality_ItemQuality'), 2),
-         'st': parse_stats(block(line, 'Bonus'))}
-    if 'IsSpellID: true' in line:
-        e['spell'] = 1
-    if allow:
-        e['cl'] = allow
-    if 'EnchantType_EnchantTypeShield' in line:
-        e['shield'] = 1
-    if 'EnchantType_EnchantTypeTwoHand' in line:
-        e['twohand'] = 1
-    t = tips.get(eid)
-    if t and 'spell' not in e:
-        e['ic'] = t.get('icon', '')
-    enchants.append(e)
+    txt = P.clean(t['tooltip'])
+    m = re.search(r'Use: (.*?)(?:\(\d+ (?:Min|Sec|Hour)s? Cooldown\)|Max Stack|Sell Price|Requires|$)', txt)
+    use = (m.group(1) if m else '').strip()
+    cat, where = None, ''
+    if sp in elix:
+        mask = elix[sp]
+        cat = {1: 'battle', 2: 'guardian', 3: 'flask', 7: 'flask', 11: 'flask'}.get(mask)
+        if mask == 7:
+            where = 'Only works in Blade\'s Edge Mountains, Gruul\'s Lair and Magtheridon\'s Lair (Unstable Flask).'
+        if mask == 11:
+            where = 'Only works in Tempest Keep, Serpentshrine Cavern, Hyjal, Black Temple and Sunwell Plateau (Shattrath Flask).'
+    elif sub == 5 and re.search(r'well fed', txt, re.I):
+        cat = 'food'
+    elif sub == 4 and t['name'].startswith('Scroll of'):
+        cat = 'scroll'
+    elif sub == 1 and re.search(r'for \d+ (?:sec|min)', use) and re.search(r'armor|Stamina|Strength|Agility|maximum health|dodge|defense|block', use, re.I):
+        cat = 'potion'
+    if not cat:
+        continue
+    st = P.consumable_stats(use)
+    dur = re.search(r'for (\d+) (sec|min|hour|hours|hrs?)\b', use)
+    c = {'id': iid, 'n': t['name'], 'c': cat, 'q': int(t.get('quality', 1)), 'ic': t.get('icon', ''), 'st': st,
+         'tx': re.sub(r'\s*(?:Battle|Guardian) Elixir\.', '', use).strip(), 'rl': int(r[ix['RequiredLevel']] or 0)}
+    if where:
+        c['where'] = where
+    if cat == 'scroll':
+        c['g'] = re.sub(r'\s+[IVX]+$', '', t['name'])          # scrolls of different kinds stack
+    if cat == 'potion' and dur:
+        c['dur'] = int(dur.group(1)) * (60 if dur.group(2).startswith('min') else 1)
+    if cat == 'food' and re.search(r'stamina', use, re.I) is None and not st:
+        continue
+    key = (cat, t['name'])
+    if key not in cons or (st and not cons[key]['st']):
+        cons[key] = c
+consumables = sorted(cons.values(), key=lambda c: (c['c'], c['n']))
+from collections import Counter  # noqa: E402
+print('consumables', Counter(c['c'] for c in consumables))
 
-# ---------------------------------------------------------------- base stats
-def base_stats(path, cls):
-    s = open(path).read()
-    out = {}
-    named = {}
-    for name, body in re.findall(r'(\w+) := stats\.Stats\{(.*?)\n\t\}', s, re.S):
-        named[name] = body
-    for race, rest in re.findall(r'BaseStatsKey\{Race: proto\.Race_Race(\w+), Class: proto\.Class_Class\w+\}\] = (stats\.Stats\{.*?\n\t\}|\w+)', s, re.S):
-        body = named[rest] if not rest.startswith('stats.Stats') else rest
-        vals = {}
-        for k, v, _c in re.findall(r"stats\.(\w+):\s*([-\d.]+)(?:\s*\*\s*core\.(\w+))?", body):
-            vals[k] = float(v)
-        dodge = re.search(r'stats\.Dodge:\s*([-\d.]+)', body)
-        r = race.replace('10', '').replace('30', '')
-        out[r.lower()] = {'hp': vals.get('Health', 0), 'str': vals.get('Strength', 0), 'agi': vals.get('Agility', 0),
-                          'sta': vals.get('Stamina', 0), 'int': vals.get('Intellect', 0), 'spi': vals.get('Spirit', 0),
-                          'dodge': float(dodge.group(1)) if dodge else 0}
-    return out
+# ================================================================== bosses
+from bosses import BOSSES  # noqa: E402  (hand-written list with notes: tools/bosses.py)
+cols, rows = sqlrows.table(SQL, 'creature_template')
+cix = {c: i for i, c in enumerate(cols)}
+crt = {int(r[cix['Entry']]): r for r in rows}
+_, cls_rows = sqlrows.table(SQL, 'creature_template_classlevelstats')
+cls_stats = {(int(r[0]), int(r[1])): r for r in cls_rows}
+script_dir = os.path.join(MANGOS, 'src/game/AI/ScriptDevAI/scripts')
+spell_consts = {}
+for dp, _dn, fns in os.walk(script_dir):
+    for fn in fns:
+        if fn.endswith('.cpp') or fn.endswith('.h'):
+            for name, sid in re.findall(r'\b(SPELL_[A-Z0-9_]+)\s*=\s*(\d+)', open(os.path.join(dp, fn), errors='replace').read()):
+                spell_consts.setdefault((fn, name), int(sid))
+                spell_consts.setdefault(('*', name), int(sid))
+bosses = []
+for b in BOSSES:
+    r = crt.get(b['entry'])
+    if not r:
+        print('  missing creature', b['entry'], b['n'])
+        continue
+    lvl = int(r[cix['MaxLevel']])
+    rank = int(r[cix['Rank']])
+    level = 73 if rank == 3 else lvl                                    # bosses ("??") fight as level 73
+    swing = int(r[cix['MeleeBaseAttackTime']]) / 1000
+    cl = int(r[cix['UnitClass']])
+    exp = int(r[cix['Expansion']])
+    st = cls_stats.get((min(level, 73), cl))
+    dmg = None
+    if st and float(r[cix['DamageMultiplier']]) > 0:
+        base = float(st[6 if exp >= 1 else 5])
+        var = float(r[cix['DamageVariance']])
+        mult = float(r[cix['DamageMultiplier']])
+        ap = float(st[7])
+        dmg = [round(base * (1 - var / 2) * mult + ap / 14), round(base * (1 + var / 2) * mult + ap / 14)]
+    if b.get('dmg') == 'none':
+        dmg = None
+    abil = []
+    for a in b.get('abilities', []):
+        sid = a.get('id') or (spell_consts.get((b['script'], a['const'])) if a.get('const') else None)
+        if a.get('const') and not sid:
+            print('  no spell id for', b['n'], a['const'])
+        abil.append({k: v for k, v in (('n', a['n']), ('id', sid), ('d', a.get('d', ''))) if v})
+    bosses.append({'id': b['entry'], 'n': b['n'], 'raid': b['raid'], 'lvl': level, 'swing': swing, 'dmg': dmg,
+                   'note': b.get('note', ''), 'ab': abil, **({'adds': b['adds']} if b.get('adds') else {}),
+                   **({'dw': 1} if b.get('dw') else {}), **({'phase': b['phase']} if b.get('phase') else {})})
+print('bosses', len(bosses))
 
-bases = {
-    'warrior': base_stats(os.path.join(SIMS, 'sim/warrior/warrior.go'), 'warrior'),
-    'paladin': base_stats(os.path.join(SIMS, 'sim/paladin/paladin.go'), 'paladin'),
-    'druid': base_stats(os.path.join(SIMS, 'sim/druid/druid.go'), 'druid'),
-}
+# ================================================================== base stats and talents (unchanged sources)
+exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gen_talents.py')).read())
 
-# ---------------------------------------------------------------- talents
-ltc = os.path.join(LTC, 'app/src/main/java/com/oppahansi/ltc/utils/')
-
-
-def parse_java(fn, key):
-    body = open(os.path.join(ltc, fn)).read()
-    body = body[body.index('{', body.index(key)):]
-    stack, root, i = [], None, 0
-    while i < len(body):
-        c = body[i]
-        if c == '{':
-            new = []
-            if stack:
-                stack[-1].append(new)
-            else:
-                root = new
-            stack.append(new)
-        elif c == '}':
-            stack.pop()
-            if not stack:
-                break
-        elif c == '"':
-            j = i + 1
-            while body[j] != '"' or body[j - 1] == '\\':
-                j += 1
-            stack[-1].append(body[i + 1:j].replace('\\"', '"'))
-            i = j
-        i += 1
-    return root
-
-
-names = parse_java('TalentNames.java', 'TALENT_NAMES =')[1]      # [class][tree][pos], TBC = index 1
-icons = parse_java('TalentIcons.java', 'TALENT_TREE_TALENT_ICONS =')  # [class][tree][pos] (expansion handled below)
-descs = parse_java('RankDescriptionsTbc.java', 'RANK_DESCRIPTIONS =')
-LTC_CLASS = {'druid': 0, 'paladin': 3, 'warrior': 8}
-
-
-def ts_talents(cls):
-    s = open(os.path.join(SIMS, f'ui/core/talents/{cls}.ts')).read()
-    trees = []
-    for tree in re.split(r"\n\t\{\n\t\tname: ", s)[1:]:
-        tname = re.match(r"'([^']+)'", tree).group(1)
-        bg = re.search(r"backgroundUrl: '([^']+)'", tree)
-        ts = []
-        for t in re.findall(r"\{\n\t\t\t\t(?://)?fieldName: '(\w+)',\n\t\t\t\tlocation: \{\n\t\t\t\t\trowIdx: (\d+),\n\t\t\t\t\tcolIdx: (\d+),\n\t\t\t\t\},\n(?:\t\t\t\tprereqLocation: \{\n\t\t\t\t\trowIdx: (\d+),\n\t\t\t\t\tcolIdx: (\d+),\n\t\t\t\t\},\n)?\t\t\t\tspellIds: \[([\d, ]*)\],\n\t\t\t\tmaxPoints: (\d+),", tree):
-            f, r, c, pr, pc, sp, mp = t
-            d = {'f': f, 'r': int(r), 'c': int(c), 'max': int(mp), 'spells': [int(x) for x in sp.split(',') if x.strip()]}
-            if pr:
-                d['req'] = [int(pr), int(pc)]
-            ts.append(d)
-        trees.append({'name': tname, 'talents': ts})
-    return trees
-
-
-talents = {}
-icon_dir = os.path.join(ROOT, 'web', 'talents')
-os.makedirs(icon_dir, exist_ok=True)
-res = os.path.join(LTC, 'app/src/main/res/drawable-xxhdpi')
-from PIL import Image
-for cls in ('warrior', 'paladin', 'druid'):
-    trees = ts_talents(cls)
-    ci = LTC_CLASS[cls]
-    for ti, tree in enumerate(trees):
-        nm, ds, ic = names[ci][ti], descs[ci][ti], icons[1][ci][ti]
-        for t in tree['talents']:
-            pos = t['r'] * 4 + t['c']
-            t['n'] = nm[pos]
-            t['d'] = [x for x in ds[pos] if x]
-            icon = ic[pos]
-            t['ic'] = icon
-            src = os.path.join(res, icon + '.png')
-            dst = os.path.join(icon_dir, icon + '.jpg')
-            if os.path.exists(src) and not os.path.exists(dst):
-                Image.open(src).convert('RGB').resize((56, 56), Image.LANCZOS).save(dst, quality=86, optimize=True)
-            if not os.path.exists(src):
-                print('missing talent icon', cls, t['n'], icon)
-        talents[cls] = trees
-
-json.dump({'items': items, 'sets': sets}, open(os.path.join(OUT, 'items.json'), 'w'), separators=(',', ':'))
-json.dump(gems, open(os.path.join(OUT, 'gems.json'), 'w'), separators=(',', ':'))
-json.dump(enchants, open(os.path.join(OUT, 'enchants.json'), 'w'), separators=(',', ':'))
-json.dump(bases, open(os.path.join(OUT, 'bases.json'), 'w'), indent=1)
-json.dump(talents, open(os.path.join(OUT, 'talents.json'), 'w'), separators=(',', ':'))
-print('items', len(items), 'sets', len(sets), 'gems', len(gems), 'enchants', len(enchants))
-for c, t in talents.items():
-    print(c, [(tr['name'], len(tr['talents'])) for tr in t])
+json.dump({'items': items, 'sets': sets}, open(os.path.join(WEB, 'items.json'), 'w'), separators=(',', ':'))
+json.dump(gems, open(os.path.join(WEB, 'gems.json'), 'w'), separators=(',', ':'))
+json.dump({'list': enchants, 'alias': alias}, open(os.path.join(WEB, 'enchants.json'), 'w'), separators=(',', ':'))
+json.dump(consumables, open(os.path.join(WEB, 'consumables.json'), 'w'), separators=(',', ':'))
+json.dump(bosses, open(os.path.join(WEB, 'bosses.json'), 'w'), separators=(',', ':'))
+for f in ('items', 'gems', 'enchants', 'consumables', 'bosses'):
+    print(f, os.path.getsize(os.path.join(WEB, f + '.json')) // 1024, 'KB')

@@ -40,3 +40,19 @@ export function icon(name: string | undefined, size: number, fallback: string, c
 export const fmt = (n: number, d = 2) => (Math.round(n * 10 ** d) / 10 ** d).toFixed(d);
 export const pct = (n: number, d = 2) => fmt(n, d) + '%';
 export const signed = (n: number) => (n >= 0 ? '+' : '') + n;
+
+/** tap does one thing, press and hold (or right-click) another; a finger that moves (scrolling) does neither */
+export function pressable(el: HTMLElement, onTap: () => void, onHold: () => void) {
+  let timer = 0, held = false, x = 0, y = 0, down = false;
+  const cancel = () => { clearTimeout(timer); down = false; };
+  el.addEventListener('pointerdown', e => {
+    down = true; held = false; x = e.clientX; y = e.clientY;
+    timer = window.setTimeout(() => { if (down) { held = true; down = false; onHold(); } }, 450);
+  });
+  el.addEventListener('pointermove', e => { if (down && Math.hypot(e.clientX - x, e.clientY - y) > 10) cancel(); });
+  el.addEventListener('pointercancel', cancel);
+  el.addEventListener('pointerleave', cancel);
+  el.addEventListener('pointerup', () => { const was = down; cancel(); if (was && !held) onTap(); });
+  el.addEventListener('contextmenu', e => { e.preventDefault(); cancel(); if (!held) { held = true; onHold(); } });
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onTap(); } });
+}

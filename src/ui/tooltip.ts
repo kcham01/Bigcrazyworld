@@ -1,5 +1,5 @@
 // Item, gem, enchant and talent tooltips in the style of the game (and Wowhead).
-import { ENCHANT_BY_ID, Enchant, Gem, GEM_BY_ID, Item, ITEM_BY_ID, QUALITY_COLOR, SETS, STAT_NAMES, Talent, wowheadItemUrl, wowheadSpellUrl } from '../data';
+import { ENCHANT_BY_ID, Enchant, Gem, GEM_BY_ID, Item, ITEM_BY_ID, QUALITY_COLOR, SETS, STAT_NAMES, Talent, enchantUrl, wowheadItemUrl, wowheadSpellUrl } from '../data';
 import { GearPiece, gemFits, Profile } from '../engine';
 import { h } from './dom';
 
@@ -64,8 +64,24 @@ export function itemTooltip(it: Item, ctx: TooltipCtx = {}): HTMLElement {
   return box;
 }
 
+const PCT_STATS: Record<string, string> = { critpct: '% crit', scritpct: '% spell crit', hitpct: '% hit', shitpct: '% spell hit', hitred: '% boss miss chance', slow: '% slower boss swings' };
 export function statText(st: Record<string, number>): string {
-  return Object.entries(st).filter(([k]) => k !== 'rap').map(([k, v]) => `+${v} ${STAT_NAMES[k] || k}`).join(', ');
+  const keys = Object.keys(st);
+  // "+80 to Arcane, Holy and Nature spell damage" style lists read better merged
+  const out: string[] = [];
+  const done = new Set<string>();
+  const res = ['arcres', 'fireres', 'frostres', 'natres', 'shadres'];
+  if (res.every(k => st[k] && st[k] === st.arcres)) { out.push(`+${st.arcres} All Resistances`); res.forEach(k => done.add(k)); }
+  if (st.sp && st.heal && st.sp === st.heal) { out.push(`+${st.sp} Spell Damage and Healing`); done.add('sp'); done.add('heal'); }
+  if (st.ap && st.rap && st.ap === st.rap) done.add('rap');
+  for (const k of keys) {
+    if (done.has(k)) continue;
+    const v = st[k];
+    if (PCT_STATS[k]) out.push(`${v > 0 ? '+' : ''}${v}${PCT_STATS[k]}`);
+    else if (k === 'apred') out.push(`-${v} boss attack power`);
+    else out.push(`${v >= 0 ? '+' : ''}${v} ${STAT_NAMES[k] || k}`);
+  }
+  return out.join(', ');
 }
 export function enchantText(e: Enchant): string {
   const s = statText(e.st);
@@ -87,9 +103,14 @@ function colorWords(c: string) {
 
 export function enchantTooltip(e: Enchant): HTMLElement {
   return h('div', { class: 'tt' },
-    h('div', { class: 'tn', style: { color: QUALITY_COLOR[e.q] } }, e.n),
-    h('div', { class: 'g' }, statText(e.st) || 'No stat bonus'),
-    h('div', { class: 'src' }, h('a', { href: e.spell ? wowheadSpellUrl(e.id) : wowheadItemUrl(e.id), target: '_blank', rel: 'noopener' }, 'View on Wowhead')));
+    h('div', { class: 'tn', style: { color: '#1eff00' } }, e.n),
+    h('div', { class: 'g' }, e.tx),
+    statText(e.st) ? h('div', null, 'Stats: ' + statText(e.st)) : null,
+    e.req ? h('div', { class: 'y' }, `Requires a level ${e.req} or higher item`) : null,
+    e.prof ? h('div', { class: 'small' }, `Requires ${e.prof}`) : null,
+    e.rep ? h('div', { class: 'small' }, `Formula from ${e.rep}`) : null,
+    e.cl ? h('div', { class: 'small' }, `${e.cl[0].toUpperCase() + e.cl.slice(1)}s only`) : null,
+    h('div', { class: 'src' }, h('a', { href: enchantUrl(e), target: '_blank', rel: 'noopener' }, e.id ? 'View on Wowhead' : 'Search Wowhead')));
 }
 
 export function talentTooltip(t: Talent, rank: number, treeName: string, reqText: string[]): HTMLElement {

@@ -108,8 +108,10 @@ const save = () => fs.writeFileSync(path.join(__dirname, 'results.json'), JSON.s
     if (n) {
       await tapSel('.sheet .li', 'Socket');
       await shot('06-gems');
-      await tapSel('.sheet .li >> nth=0');
+      const gem = (await page.locator('.scrim').last().locator('.li .nm').first().textContent()).trim();
+      await tapSel('.scrim:last-of-type .li');
       await shot('07-gemmed');
+      check('gem goes in the socket', (await page.locator('.scrim').last().textContent()).includes(gem), gem);
     }
     while (await sheets()) await back();
   });
@@ -126,15 +128,39 @@ const save = () => fs.writeFileSync(path.join(__dirname, 'results.json'), JSON.s
     await tapSel('#tabs .tab', 'Buffs');
     await shot('10-buffs');
     const before = await page.locator('#top .verdict').textContent();
-    await tapSel('.tog', 'Holy Shield');
+    await tapSel('.bt', 'Holy Shield');
     const after = await page.locator('#top .verdict').textContent();
     check('Holy Shield toggle changes the total', before !== after, `${before} -> ${after}`);
-    await tapSel('.tog', 'Holy Shield');
+    await tapSel('.bt', 'Holy Shield');
+    // food drop-down
+    await tapSel('.selrow', 'Food');
+    await shot('10b-food');
+    await tapSel('.scrim:last-of-type .li', 'Spicy Crawdad');
+    check('food picked from the list', (await page.locator('.selrow', { hasText: 'Food' }).textContent()).includes('Spicy Crawdad'));
+    // flask closes the elixir slots
+    check('flask closes the elixir rows', (await page.locator('.selrow.dis', { hasText: 'Battle Elixir' }).count()) === 1);
+    // a raid buff: tap on, tap again for improved, tap again off
+    const might = page.locator('.bt', { hasText: 'Blessing of Might' });
+    await tapSel('.bt', 'Blessing of Might');
+    check('raid buff switches on', (await might.getAttribute('class')).includes('on'));
+    await tapSel('.bt', 'Blessing of Might');
+    check('second tap: improved', (await might.getAttribute('class')).includes('imp'));
+    await tapSel('.bt', 'Blessing of Might');
+    check('third tap: off', (await might.getAttribute('class')).includes('off'));
+    await shot('10c-buff-grid');
+    // the boss
+    await tapSel('.selrow', 'Boss');
+    await shot('10d-bosses');
+    await tapSel('.scrim:last-of-type .li', 'Gruul the Dragonkiller');
+    await shot('10e-gruul');
+    check('boss picked', (await page.locator('.selrow', { hasText: 'Boss' }).textContent()).includes('Gruul'));
   });
 
   await step('caps', async () => {
     await tapSel('#tabs .tab', 'Caps');
     await shot('11-caps');
+    check('caps screen shows the boss', (await page.locator('.frame', { hasText: 'The Boss' }).textContent()).includes('Gruul'));
+    check('damage taken for the boss', /Normal hit on you/.test(await page.locator('.frame', { hasText: 'Damage Taken' }).textContent()));
     await page.locator('#view').evaluate(v => { v.scrollTop = 900; });
     await shot('12-caps-more');
   });

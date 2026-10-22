@@ -1,5 +1,6 @@
 // TBCrushCalc: the app shell. A top bar with the open character, the screen, and tabs along the bottom.
-import { BOSS, verdict } from './engine';
+import { loadData } from './data';
+import { verdict } from './engine';
 import { buffsView } from './ui/buffs';
 import { capsView } from './ui/caps';
 import { characterView, mainMode } from './ui/character';
@@ -34,7 +35,7 @@ function draw() {
     h('div', { class: 'sub' }, `${describe(p)} · ${specText(p)}`)));
   top.appendChild(h('button', { class: 'verdict ' + (v.uncrushable ? 'ok' : 'bad'), style: { border: '0', cursor: 'pointer', padding: '4px 8px', minWidth: '78px' }, onclick: () => go('caps') },
     h('div', { style: { font: '700 15px var(--body)', color: '#fff' } }, pct(v.total, 1)),
-    h('div', { style: { font: '700 9.5px var(--title)', color: v.uncrushable ? '#1eff00' : '#ff5a4a' } }, v.uncrushable ? 'UNCRUSHABLE' : `${pct(BOSS.cap - v.total, 1)} SHORT`)));
+    h('div', { style: { font: '700 9.5px var(--title)', color: v.uncrushable ? '#1eff00' : '#ff5a4a' } }, v.uncrushable ? 'UNCRUSHABLE' : `${pct(v.short, 1)} SHORT`)));
 
   clear(tabs);
   for (const [id, name] of TABS) tabs.appendChild(h('button', { class: 'tab' + (S.tab === id ? ' on' : ''), onclick: () => go(id) }, name));
@@ -58,7 +59,16 @@ function go(tab: TabId) {
   return false;
 };
 
-function start() {
+async function start() {
+  const splash = h('div', { class: 'splash' }, h('div', { class: 'logo' }, 'TBCrushCalc'), h('div', { class: 'small' }, 'Loading every item in Outland…'));
+  document.body.appendChild(splash);
+  try {
+    await loadData(name => fetch(`data/${name}.json`).then(r => { if (!r.ok) throw new Error(`${name}: ${r.status}`); return r.json(); }));
+  } catch (e) {
+    splash.appendChild(h('div', { class: 'red small', style: { marginTop: '12px' } }, `Couldn't load the game data (${String(e)}). Close and reopen the app.`));
+    return;
+  }
+  splash.remove();
   init();
   onRender(draw);
   document.body.appendChild(app);

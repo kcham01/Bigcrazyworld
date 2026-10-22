@@ -3,7 +3,7 @@ import { CLASSES, RACE_NAMES } from '../data';
 import { Profile, treePoints } from '../engine';
 import { loadAll, loadCurrentId, saveAll, saveCurrentId } from '../store';
 
-export type StatView = 'base' | 'def' | 'melee';
+export type StatView = 'base' | 'def' | 'melee' | 'ranged' | 'spell';
 export type TabId = 'char' | 'talents' | 'buffs' | 'caps' | 'saved';
 
 export const S = {
@@ -16,6 +16,7 @@ export const S = {
   statR: 'def' as StatView,
   phase: 5,
   armorOnly: true,
+  minLevel: 0,             // item picker: lowest required level shown
 };
 
 let renderFn: () => void = () => {};

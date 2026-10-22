@@ -1,10 +1,11 @@
 // The Character screen, laid out like the game's character pane: equipment slots down both sides,
 // the character in the middle, weapons along the bottom, and the stat panels underneath.
 import {
-  BEST_ARMOR, BUFFS, ENCHANTS, ENCHANT_BY_ID, Enchant, GEMS, GEM_BY_ID, Gem, ITEMS, ITEM_BY_ID, Item, QUALITY_COLOR,
-  RACE_ICON, SLOTS, Slot, canUse, slotAccepts,
+  BEST_ARMOR, ENCHANTS, ENCHANT_BY_ID, Enchant, GEMS, GEM_BY_ID, Gem, ITEMS, ITEM_BY_ID, Item, QUALITY_COLOR,
+  RACE_ICON, SLOTS, Slot, canUse, enchantProblem, enchantSlotsOf, slotAccepts,
 } from '../data';
-import { AGI_PER_DODGE, BOSS, R, Sheet, computeSheet, gemFits, Profile, verdict } from '../engine';
+import { AGI_PER_DODGE, R, Sheet, computeSheet, gemFits, Profile, verdict } from '../engine';
+import { pickFrom, PickRow } from './picker';
 import { autoGear } from '../store';
 import { clear, fmt, h, icon, pct } from './dom';
 import { closeTop, confirmSheet, openSheet, toast } from './sheets';
@@ -47,7 +48,7 @@ export function characterView(): HTMLElement {
   };
 
   // the middle: resistances, portrait, verdict
-  const res = resistances(p, sheet);
+  const res = sheet.resist;
   const v = verdict(p, mainMode(p));
   const cd = p.cls === 'paladin' ? (sheet.holyShieldOn ? 'with Holy Shield' : 'no Holy Shield') : p.cls === 'warrior' ? (sheet.shieldBlockOn ? 'with Shield Block' : 'no Shield Block') : 'bear form';
   const model = h('div', { class: 'model' },
@@ -61,7 +62,7 @@ export function characterView(): HTMLElement {
     h('div', { class: 'verdict ' + (v.uncrushable ? 'ok' : 'bad') },
       h('div', { class: 'big' }, v.uncrushable ? 'Uncrushable' : 'Crushable'),
       h('div', { class: 'num' }, pct(v.total)),
-      h('div', { class: 'of' }, v.uncrushable ? `of ${BOSS.cap}% · ${cd}` : `${fmt(v.short)}% short · ${cd}`)));
+      h('div', { class: 'of' }, v.uncrushable ? `of ${fmt(v.cap, 1)}% · ${cd}` : `${fmt(v.short)}% short · ${cd}`)));
 
   root.appendChild(h('div', { class: 'frame rock' }, h('div', { class: 'title' }, 'Character'),
     h('div', { class: 'doll' },
@@ -79,29 +80,34 @@ export function characterView(): HTMLElement {
   return root;
 }
 
-function resistances(p: Profile, s: Sheet): Record<string, number> {
-  const r: Record<string, number> = {};
-  for (const k of ['arcres', 'fireres', 'natres', 'frostres', 'shadres']) r[k] = s.gear.st[k] || 0;
-  for (const b of BUFFS) if (p.buffs[b.id] && b.st) for (const k in r) r[k] += b.st[k] || 0;
-  return r;
+const VIEW_NAME: Record<StatView, string> = { base: 'Base Stats', def: 'Defenses', melee: 'Melee', ranged: 'Ranged', spell: 'Spell' };
+export function statViews(cls: string): StatView[] {
+  return cls === 'warrior' ? ['base', 'def', 'melee', 'ranged'] : ['base', 'def', 'melee', 'spell'];
 }
 
 function statBox(s: Sheet, which: 'statL' | 'statR'): HTMLElement {
-  const view = S[which];
-  const sel = h('select', { 'aria-label': 'Stat panel' },
-    ([['base', 'Base Stats'], ['def', 'Defenses'], ['melee', 'Melee']] as [StatView, string][]).map(([v, n]) => h('option', { value: v, selected: v === view }, n)));
+  const views = statViews(s.cls);
+  const view = views.includes(S[which]) ? S[which] : which === 'statL' ? 'base' : 'def';
+  const sel = h('select', { 'aria-label': 'Stat panel' }, views.map(v => h('option', { value: v, selected: v === view }, VIEW_NAME[v])));
   sel.onchange = () => { S[which] = sel.value as StatView; commit(); };
   const line = (k: string, v: string, up = false) => h('div', { class: 'statline' }, h('span', { class: 'k' }, k), h('span', { class: 'v' + (up ? ' up' : '') }, v));
+  const n = (x: number) => String(Math.floor(x + 1e-9));
   let lines: HTMLElement[] = [];
-  if (view === 'base') lines = [line('Strength', String(s.str)), line('Agility', String(s.agi)), line('Stamina', String(s.sta)), line('Intellect', String(s.int)), line('Spirit', String(s.spi)), line('Armor', String(s.armor), true)];
+  if (view === 'base') lines = [line('Strength', n(s.str)), line('Agility', n(s.agi)), line('Stamina', n(s.sta)), line('Intellect', n(s.int)), line('Spirit', n(s.spi)), line('Armor', n(s.armor), true)];
   if (view === 'def') lines = [
-    line('Health', s.health.toLocaleString()), line('Armor', String(s.armor), true),
+    line('Health', Math.round(s.health).toLocaleString()), line('Armor', n(s.armor), true),
     line('Defense', `${s.defenseFloor}`, s.defenseFloor > 350), line('Dodge', pct(s.dodge)),
     line('Parry', s.canParry ? pct(s.parry) : '—'), line('Block', s.canBlock ? pct(s.block) : '—'),
-    line('Block Value', s.canBlock ? String(s.blockValue) : '—'), line('Resilience', String(s.resilience)),
+    line('Block Value', s.canBlock ? String(s.blockValue) : '—'), line('Resilience', n(s.resilience)),
   ];
-  if (view === 'melee') lines = [line('Attack Power', String(s.ap)), line('Hit', pct(s.hit)), line('Crit', pct(s.crit)), line('Expertise', String(s.expertise)),
-    line('Damage cut', pct(s.armorReduction))];
+  if (view === 'melee') lines = [line('Attack Power', n(s.ap)), line('Hit', pct(s.hit)), line('Crit', pct(s.crit)), line('Expertise', String(s.expertise)),
+    line('Haste', pct(s.haste)), line('Damage cut', pct(s.armorReduction))];
+  if (view === 'ranged') lines = s.hasRanged ? [
+    line('Weapon', s.rangedDmg ? `${n(s.rangedDmg[0])}–${n(s.rangedDmg[1])}` : '—'), line('Speed', fmt(s.rangedSpeed)),
+    line('Attack Power', n(s.rap)), line('Hit', pct(s.rhit)), line('Crit', pct(s.rcrit)),
+  ] : [line('Ranged weapon', 'none'), line('Attack Power', n(s.rap)), line('Hit', pct(s.rhit)), line('Crit', pct(s.rcrit))];
+  if (view === 'spell') lines = [line('Bonus Damage', n(s.sp)), line('Bonus Healing', n(s.heal)), line('Hit', pct(s.shit)), line('Crit', pct(s.scrit)),
+    line('Haste', pct(s.shaste)), line('Mana', n(s.mana)), line('Mana per 5 sec', n(s.mp5))];
   return h('div', { class: 'statbox inset' }, sel, lines);
 }
 
@@ -184,10 +190,11 @@ function openPicker(slot: Slot, after?: () => void) {
   const p = cur();
   const s = computeSheet(p, 'passive');
   let q = '', sort: SortKey = 'avoid', limit = 80;
-  const search = h('input', { type: 'search', placeholder: 'Search items', style: { width: '100%' } });
+  const search = h('input', { type: 'search', placeholder: 'Search items or bosses', style: { width: '100%' } });
   const chips = h('div');
+  const count = h('div', { class: 'small muted', style: { margin: '2px 0 4px' } });
   const list = h('div', { class: 'list' });
-  const body = h('div', null, search, chips, list);
+  const body = h('div', null, search, chips, count, list);
   const sh = openSheet(slotLabel(slot), body, { full: true });
   const isArmor = ARMOR_SLOTS.includes(slot);
 
@@ -198,18 +205,21 @@ function openPicker(slot: Slot, after?: () => void) {
     chips.appendChild(h('div', { class: 'chips' },
       [1, 2, 3, 4, 5].map(n => chip(n === 5 ? 'All phases' : `Up to P${n}`, S.phase === n, () => { S.phase = n; })),
       isArmor ? chip(`${BEST_ARMOR[p.cls] === 'plate' ? 'Plate' : 'Leather'} only`, S.armorOnly, () => { S.armorOnly = !S.armorOnly; }) : null));
+    chips.appendChild(h('div', { class: 'chips', style: { marginTop: '0' } }, h('span', { class: 'small gold', style: { alignSelf: 'center' } }, 'Level:'),
+      ([[0, 'Any'], [60, '60+'], [70, '70']] as [number, string][]).map(([n, l]) => chip(l, S.minLevel === n, () => { S.minLevel = n; }))));
     chips.appendChild(h('div', { class: 'chips', style: { marginTop: '0' } }, h('span', { class: 'small gold', style: { alignSelf: 'center' } }, 'Sort:'),
       ([['avoid', 'Avoidance'], ['sta', 'Stamina'], ['ilvl', 'Item level'], ['name', 'Name']] as [SortKey, string][]).map(([k, n]) => chip(n, sort === k, () => { sort = k; }))));
 
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-    let items = pool.filter(it => Math.max(1, it.ph) <= S.phase
+    const items = pool.filter(it => Math.max(1, it.ph) <= S.phase && (it.rl || 1) >= S.minLevel
       && (!isArmor || !S.armorOnly || !it.at || it.at === BEST_ARMOR[p.cls])
       && words.every(w => it.n.toLowerCase().includes(w) || (it.drop || '').toLowerCase().includes(w)));
     const av = new Map(items.map(it => [it.id, itemAvoidance(p, s, it)]));
-    items.sort((a, b) => sort === 'avoid' ? (av.get(b.id)! - av.get(a.id)!) || ((b.st.sta || 0) - (a.st.sta || 0))
+    items.sort((a, b) => sort === 'avoid' ? (av.get(b.id)! - av.get(a.id)!) || ((b.st.sta || 0) - (a.st.sta || 0)) || b.il - a.il
       : sort === 'sta' ? (b.st.sta || 0) - (a.st.sta || 0) : sort === 'ilvl' ? b.il - a.il : a.n.localeCompare(b.n));
+    count.textContent = `${items.length.toLocaleString()} of ${pool.length.toLocaleString()} items for this slot`;
     clear(list);
-    if (!items.length) { list.appendChild(h('div', { class: 'empty-state' }, 'No items match.')); return; }
+    if (!items.length) { list.appendChild(h('div', { class: 'empty-state' }, 'No items match. Try "All phases", "Any" level, or turn off the armor filter.')); return; }
     const curId = p.gear[slot]?.id;
     for (const it of items.slice(0, limit)) {
       const type = TYPE_NAME[it.at || it.wt || it.rt || ''] || '';
@@ -217,10 +227,11 @@ function openPicker(slot: Slot, after?: () => void) {
         h('span', { class: 'slot filled bq' + it.q, style: { '--slot': '38px' } as any }, icon(it.ic, 38, it.n)),
         h('div', { class: 'grow' },
           h('div', { class: 'nm', style: { color: QUALITY_COLOR[it.q] } }, it.n),
-          h('div', { class: 'sub' }, [`ilvl ${it.il}`, type, `P${Math.max(1, it.ph)}`, it.so?.length ? `${it.so.length} socket${it.so.length > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · '))),
+          h('div', { class: 'sub' }, [it.rl ? `Req. level ${it.rl}` : '', `ilvl ${it.il}`, type, `P${Math.max(1, it.ph)}`, it.so?.length ? `${it.so.length} socket${it.so.length > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ')),
+          it.drop ? h('div', { class: 'sub' }, it.drop) : null),
         h('div', { class: 'score' }, h('div', null, `+${fmt(av.get(it.id)!)}%`), h('div', { class: 'small', style: { color: '#fff' } }, `${it.st.sta || 0} sta`))));
     }
-    if (items.length > limit) list.appendChild(h('button', { class: 'btn dark', style: { marginTop: '8px' }, onclick: () => { limit += 120; draw(); } }, `Show more (${items.length - limit})`));
+    if (items.length > limit) list.appendChild(h('button', { class: 'btn dark', style: { marginTop: '8px' }, onclick: () => { limit += 150; draw(); } }, `Show more (${items.length - limit})`));
   };
   let timer = 0;
   search.addEventListener('input', () => { clearTimeout(timer); timer = window.setTimeout(() => { q = search.value; limit = 80; draw(); }, 150); });
@@ -240,7 +251,9 @@ function equip(p: Profile, slot: Slot, it: Item): boolean {
     for (const other of SLOTS) if (other.id !== slot && p.gear[other.id]?.id === it.id) { toast(`${it.n} is unique and already equipped`); return false; }
   }
   const old = p.gear[slot];
-  const keepEnch = old?.ench && enchantFits(ENCHANT_BY_ID.get(old.ench), it, slot) ? old.ench : undefined;
+  const oldE = old?.ench ? ENCHANT_BY_ID.get(old.ench) : undefined;
+  const keepEnch = oldE && !enchantProblem(oldE, it, p.cls) ? oldE.k : undefined;
+  if (oldE && !keepEnch) toast(`${oldE.n} doesn't fit the new item and was taken off`);
   const keepGems = old && old.id === it.id ? old.gems : undefined;
   p.gear[slot] = { id: it.id, ...(keepGems ? { gems: keepGems } : {}), ...(keepEnch ? { ench: keepEnch } : {}) };
   if (slot === 'mainhand' && it.ht === '2h' && p.gear.offhand) { delete p.gear.offhand; toast('Off hand removed: two-handed weapon'); }
@@ -253,89 +266,85 @@ function equip(p: Profile, slot: Slot, it: Item): boolean {
 }
 
 // ------------------------------------------------------------------------------------------ gems
-const GEM_FILTERS: [string, string][] = [['sta', 'Stamina'], ['def', 'Defense'], ['dodge', 'Dodge'], ['agi', 'Agility'], ['block', 'Block'], ['parry', 'Parry'], ['bv', 'Block value'], ['res', 'Resilience']];
+const GEM_FILTERS: [string, string][] = [['sta', 'Stamina'], ['def', 'Defense'], ['dodge', 'Dodge'], ['agi', 'Agility'], ['block', 'Block'], ['parry', 'Parry'], ['bv', 'Block value'], ['res', 'Resilience'], ['str', 'Strength'], ['hit', 'Hit'], ['exp', 'Expertise']];
+const COLOR_NAME: Record<string, string> = { red: 'Red', yellow: 'Yellow', blue: 'Blue', orange: 'Orange', purple: 'Purple', green: 'Green', prismatic: 'Prismatic', meta: 'Meta' };
 
 function openGemPicker(slot: Slot, idx: number, after: () => void) {
   const p = cur();
   const piece = p.gear[slot]!;
   const it = ITEM_BY_ID.get(piece.id)!;
   const color = it.so![idx];
-  let q = '', stat = '', fitsOnly = color !== 'meta';
-  const search = h('input', { type: 'search', placeholder: 'Search gems', style: { width: '100%' } });
-  const chips = h('div');
-  const list = h('div', { class: 'list' });
-  const sh = openSheet(`${color[0].toUpperCase() + color.slice(1)} Socket`, h('div', null, search, chips, list), { full: true });
+  let stat = '', fitsOnly = false;
   const pool = GEMS.filter(g => (color === 'meta') === (g.c === 'meta'));
-  const set = (g: Gem | null) => {
-    const gems = [...(piece.gems || [])];
-    while (gems.length < (it.so || []).length) gems.push(0);
-    gems[idx] = g ? g.id : 0;
-    piece.gems = gems.some(Boolean) ? gems : undefined;
-    commit(); sh.close(); after();
-  };
-  const draw = () => {
-    clear(chips);
-    const chip = (label: string, on: boolean, fn: () => void) => h('button', { class: 'chip' + (on ? ' on' : ''), onclick: () => { fn(); draw(); } }, label);
-    if (color !== 'meta') chips.appendChild(h('div', { class: 'chips' }, chip('Matches socket', fitsOnly, () => { fitsOnly = !fitsOnly; }),
-      GEM_FILTERS.map(([k, n]) => chip(n, stat === k, () => { stat = stat === k ? '' : k; }))));
-    clear(list);
-    if (piece.gems?.[idx]) list.appendChild(h('div', { class: 'li', onclick: () => set(null) }, h('span', { class: 'icon', style: { width: '30px', height: '30px' } }, h('span', { class: 'icon-fallback' }, '✕')),
-      h('div', { class: 'grow' }, h('div', { class: 'nm' }, 'Remove gem'))));
-    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-    const gems = pool.filter(g => (!fitsOnly || gemFits(color, g.c)) && (!stat || (g.st[stat] || 0) > 0)
-      && words.every(w => (g.n + ' ' + (g.tx || '')).toLowerCase().includes(w)));
-    gems.sort((a, b) => (+gemFits(color, b.c) - +gemFits(color, a.c)) || (stat ? (b.st[stat] || 0) - (a.st[stat] || 0) : 0) || b.q - a.q || a.n.localeCompare(b.n));
-    for (const g of gems) {
-      list.appendChild(h('div', { class: 'li' + (piece.gems?.[idx] === g.id ? ' sel' : ''), onclick: () => set(g), oncontextmenu: (e: Event) => { e.preventDefault(); openSheet(g.n, gemTooltip(g)); } },
-        icon(g.ic, 30, g.n),
-        h('div', { class: 'grow' }, h('div', { class: 'nm', style: { color: QUALITY_COLOR[g.q] } }, g.n), h('div', { class: 'sub' }, g.tx || statText(g.st)),
-          g.req ? h('div', { class: 'sub' }, g.req.join('; ')) : null),
-        h('span', { class: 'score' }, h('i', { class: 'sock-' + g.c, style: { display: 'inline-block', width: '10px', height: '10px', borderRadius: '2px', marginRight: '4px' } }),
-          color === 'meta' ? '' : gemFits(color, g.c) ? '✓' : '')));
-    }
-    if (!gems.length) list.appendChild(h('div', { class: 'empty-state' }, 'No gems match.'));
-  };
-  search.addEventListener('input', () => { q = search.value; draw(); });
-  draw();
+  const rows: PickRow<number>[] = pool.map(g => ({
+    key: g.id, name: g.n, ic: g.ic || '', color: QUALITY_COLOR[g.q], sub: g.tx || statText(g.st),
+    sub2: [color === 'meta' ? '' : `${COLOR_NAME[g.c]}${gemFits(color, g.c) ? ' · matches this socket' : ''}`, (g.req || []).join('; '), g.prof ? `Requires ${g.prof}` : '', g.u ? 'Unique' : '', `P${Math.max(1, g.ph)}`].filter(Boolean).join(' · '),
+    group: color === 'meta' ? undefined : gemFits(color, g.c) ? 'Matches the socket (counts for the socket bonus)' : 'Other colours (no socket bonus)',
+    search: COLOR_NAME[g.c],
+    info: () => gemTooltip(g),
+  }));
+  const sortRows = () => rows.sort((a, b) => {
+    const ga = GEM_BY_ID.get(a.key)!, gb = GEM_BY_ID.get(b.key)!;
+    return (+gemFits(color, gb.c) - +gemFits(color, ga.c)) || (stat ? (gb.st[stat] || 0) - (ga.st[stat] || 0) : 0) || gb.q - ga.q || ga.n.localeCompare(gb.n);
+  });
+  sortRows();
+  pickFrom({
+    title: `${COLOR_NAME[color]} Socket`, rows, selected: piece.gems?.[idx] || null, none: piece.gems?.[idx] ? 'Remove gem' : undefined,
+    placeholder: `Search ${pool.length} gems`,
+    chips: color === 'meta' ? [] : [
+      { label: 'Matching colour only', on: () => fitsOnly, toggle: () => { fitsOnly = !fitsOnly; } },
+      ...GEM_FILTERS.map(([k, n]) => ({ label: n, on: () => stat === k, toggle: () => { stat = stat === k ? '' : k; sortRows(); } })),
+    ],
+    filter: r => { const g = GEM_BY_ID.get(r.key)!; return (!fitsOnly || gemFits(color, g.c)) && (!stat || (g.st[stat] || 0) > 0); },
+    onPick: k => {
+      const g: Gem | undefined = k ? GEM_BY_ID.get(k) : undefined;
+      if (g?.u && SLOTS.some(sl => (p.gear[sl.id]?.gems || []).some((x, i) => x === g.id && !(sl.id === slot && i === idx)))) { toast(`${g.n} is unique: you already wear one`); return; }
+      const gems = [...(piece.gems || [])];
+      while (gems.length < (it.so || []).length) gems.push(0);
+      gems[idx] = g ? g.id : 0;
+      piece.gems = gems.some(Boolean) ? gems : undefined;
+      commit(); after();
+    },
+  });
 }
 
 // ------------------------------------------------------------------------------------------ enchants
-export function enchantable(it: Item, slot: Slot): boolean {
-  if (it.s === 'weapon') return it.wt !== 'offhand';
-  if (it.s === 'ranged') return ['bow', 'gun', 'crossbow'].includes(it.rt || '');
-  void slot;
-  return ['head', 'shoulder', 'back', 'chest', 'wrist', 'hands', 'legs', 'feet', 'finger'].includes(it.s);
+export function enchantable(it: Item, _slot?: Slot): boolean {
+  return enchantSlotsOf(it).length > 0;
 }
-function enchantFits(e: Enchant | undefined, it: Item, slot: Slot): boolean {
-  if (!e || !enchantable(it, slot) || e.s !== it.s) return false;
-  const p = cur();
-  if (e.cl && !e.cl.includes(p.cls)) return false;
-  if (it.s === 'weapon') {
-    if (!!e.shield !== (it.wt === 'shield')) return false;
-    if (e.twohand && it.ht !== '2h') return false;
-  }
-  return true;
-}
+
+/** survival first, for sorting the enchant list */
+const tankish = (e: Enchant) => (e.st.def || 0) * 1.2 + (e.st.dodge || 0) * 1.1 + (e.st.sta || 0) + (e.st.agi || 0) + (e.st.block || 0) * 1.3 + (e.st.parry || 0)
+  + (e.st.armor || 0) / 20 + (e.st.hp || 0) / 10 + (e.st.res || 0) + (e.st.bv || 0) * 0.5 + (e.st.hit || 0) * 0.5 + (e.st.str || 0) * 0.3 + (e.st.exp || 0) * 0.5;
 
 function openEnchantPicker(slot: Slot, after: () => void) {
   const p = cur();
   const piece = p.gear[slot]!;
   const it = ITEM_BY_ID.get(piece.id)!;
-  const list = h('div', { class: 'list' });
-  const note = it.s === 'finger' ? h('p', { class: 'note' }, 'Ring enchants are for enchanters only.') : null;
-  const sh = openSheet('Enchant', h('div', null, note, list), { full: true });
-  const set = (e: Enchant | null) => { if (e) piece.ench = e.id; else delete piece.ench; commit(); sh.close(); after(); };
-  if (piece.ench) list.appendChild(h('div', { class: 'li', onclick: () => set(null) }, h('span', { class: 'icon', style: { width: '30px', height: '30px' } }, h('span', { class: 'icon-fallback' }, '✕')),
-    h('div', { class: 'grow' }, h('div', { class: 'nm' }, 'Remove enchant'))));
-  const pool = ENCHANTS.filter(e => enchantFits(e, it, slot));
-  const tankish = (e: Enchant) => (e.st.def || 0) * 1.2 + (e.st.dodge || 0) * 1.1 + (e.st.sta || 0) + (e.st.agi || 0) + (e.st.block || 0) * 1.3 + (e.st.parry || 0) + (e.st.armor || 0) / 20 + (e.st.hp || 0) / 10 + (e.st.res || 0);
-  pool.sort((a, b) => tankish(b) - tankish(a) || b.q - a.q);
-  for (const e of pool) {
-    list.appendChild(h('div', { class: 'li' + (piece.ench === e.id ? ' sel' : ''), onclick: () => set(e), oncontextmenu: (ev: Event) => { ev.preventDefault(); openSheet(e.n, enchantTooltip(e)); } },
-      icon(e.ic || 'inv_misc_note_01', 30, 'E'),
-      h('div', { class: 'grow' }, h('div', { class: 'nm', style: { color: QUALITY_COLOR[e.q] } }, e.n), h('div', { class: 'sub green' }, statText(e.st) || 'Proc or special effect'))));
-  }
-  if (!pool.length) list.appendChild(h('div', { class: 'empty-state' }, 'No enchants for this item.'));
+  // everything for this kind of slot: two-hander enchants show on one-handers too, greyed with the reason
+  const kinds = new Set(enchantSlotsOf(it));
+  if (kinds.has('weapon')) kinds.add('2h');
+  const pool = ENCHANTS.filter(e => e.sl.some(x => kinds.has(x)));
+  const rows: PickRow<number>[] = pool.map(e => {
+    const why = enchantProblem(e, it, p.cls);
+    return {
+      key: e.k, name: e.n, ic: e.ic || 'inv_misc_note_01', color: why ? '#9d9d9d' : '#1eff00',
+      sub: statText(e.st) || e.tx,
+      sub2: [e.req ? `Item level ${e.req}+` : '', e.prof ? `Requires ${e.prof}` : '', e.rep ? e.rep : '', e.cl ? `${e.cl[0].toUpperCase() + e.cl.slice(1)}s only` : '',
+        e.src === 'trainer' ? 'Enchanting trainer' : ''].filter(Boolean).join(' · ') || undefined,
+      disabled: why || undefined,
+      search: e.tx,
+      info: () => enchantTooltip(e),
+    };
+  });
+  rows.sort((a, b) => (+!!a.disabled - +!!b.disabled) || tankish(ENCHANT_BY_ID.get(b.key)!) - tankish(ENCHANT_BY_ID.get(a.key)!) || a.name.localeCompare(b.name));
+  const usable = rows.filter(r => !r.disabled).length;
+  pickFrom({
+    title: 'Enchant', rows, selected: piece.ench ?? null, none: piece.ench ? 'Remove enchant' : undefined,
+    placeholder: `Search ${rows.length} enchants`,
+    note: `${usable} of ${rows.length} fit ${it.n} (item level ${it.il}).` + (it.s === 'finger' ? ' Ring enchants are for enchanters only.' : ''),
+    onPick: k => { if (k == null) delete piece.ench; else piece.ench = k; commit(); after(); },
+  });
 }
 
 // ------------------------------------------------------------------------------------------ auto-gear
