@@ -13,7 +13,7 @@ const save = () => fs.writeFileSync(path.join(__dirname, 'results.json'), JSON.s
 
 (async () => {
   const [device] = await _android.devices();
-  const shot = async name => { await sleep(400); fs.writeFileSync(path.join(SHOTS, name + '.png'), await device.shell('screencap -p')); log('shot', name); };
+  const shot = async name => { await sleep(1200); fs.writeFileSync(path.join(SHOTS, name + '.png'), await device.shell('screencap -p')); log('shot', name); };
   let page;
   const attach = async () => {
     const webview = await device.webView({ pkg: PKG }, { timeout: 120000 });
@@ -66,13 +66,15 @@ const save = () => fs.writeFileSync(path.join(__dirname, 'results.json'), JSON.s
     await shot('02-slot');
     await tapSel('.sheet .btn', 'Change item');
     await shot('03-picker');
-    const name = (await page.locator('.sheet .li .nm').nth(1).textContent()).trim();
-    await tapSel('.sheet .li >> nth=1');
+    const picker = page.locator('.scrim').last();
+    const name = (await picker.locator('.li .nm').nth(1).textContent()).trim();
+    const box = await picker.locator('.li').nth(1).boundingBox();
+    await tapAt(box.x + box.width / 2, box.y + box.height / 2); await sleep(700);
     await shot('04-preview');
     await tapSel('.sheet .btn', 'Equip');
     await sleep(500);
     await shot('05-equipped');
-    const tt = await page.locator('.sheet .tt .tn').first().textContent();
+    const tt = await page.locator('.scrim').last().locator('.tt .tn').first().textContent();
     check('picked item is equipped', tt.trim() === name, `${tt} vs ${name}`);
     await back();
     check('Back closes the panel', (await sheets()) === 0);

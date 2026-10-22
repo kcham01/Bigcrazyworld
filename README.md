@@ -16,6 +16,13 @@
 
 It covers protection warriors, protection paladins and feral druids, with every TBC item, gem and enchant from phase 1 to phase 5.
 
+<p align="center">
+  <img src="docs/screens/character.jpg" alt="Character pane" width="24%">
+  <img src="docs/screens/item.jpg" alt="Item tooltip with sockets" width="24%">
+  <img src="docs/screens/talents.jpg" alt="Talent tree" width="24%">
+  <img src="docs/screens/caps.jpg" alt="Crush cap and attack table" width="24%">
+</p>
+
 ## What it does
 
 - **Character pane.** All 17 equipment slots around your character, with item quality colours and Wowhead-style tooltips: sockets, socket bonuses, set bonuses, enchants, item level, where it drops and a link to Wowhead.
