@@ -510,7 +510,15 @@ function workStep(sim: Sim, u: number) {
     case St.Herd: {
       if (U.cd[u] < 30) return;
       U.cd[u] = 0;
-      if (city) civ.addStock(sim, c, R.Food, 1.2 * skill);
+      if (city) {
+        civ.addStock(sim, c, R.Food, 1.2 * skill + Math.min(6, city.tame) * 0.3);
+        // bring a wild beast into the herd
+        if (city.tame < 14) {
+          let best = -1;
+          U.near(U.x[u], U.y[u], 10, (j) => { const dj = SPECIES[U.spec[j]]; if (dj.tame && !(U.flags[j] & UF.Tame) && !dj.sapient && dj.tame !== 'war') { best = j; return true; } });
+          if (best >= 0) { U.flags[best] |= UF.Tame; U.city[best] = c; sim.fx.push({ kind: 'ring', x: U.x[best], y: U.y[best], t: 0, life: 12, color: 0xf2c94c, size: 0.8 }); }
+        }
+      }
       U.state[u] = St.Idle;
       return;
     }

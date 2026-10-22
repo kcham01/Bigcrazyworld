@@ -588,3 +588,36 @@ export function paintTree(kind: number, variant: number, snow: boolean): Pix {
 }
 
 export { mix };
+
+// ------------------------------------------------------------------ remains: graves, ruins, craters, bones
+export function paintDeco(kind: number, v: number): Pix {
+  const p = new Pix(10, 10);
+  const stone = rgb(0x9a948c), stoneD = rgb(0x6b665f), bone = rgb(0xe8e0c8);
+  switch (kind) {
+    case 1: // grave
+      p.rect(3, 5, 4, 4, rgb(0x5e4a32)); p.rect(4, 1, 2, 5, stone); p.hline(3, 6, 2, stone); p.set(5, 1, rgb(0xb8b0a0));
+      p.set(2, 8, rgb(0xe0453a)); p.set(7, 8, rgb(0xf2c94c));
+      break;
+    case 2: // ruins
+      p.rect(1, 4 + v, 3, 5 - v, stone); p.rect(5, 6, 4, 3, stoneD); p.set(5, 5, stone); p.set(2, 3 + v, stoneD); p.set(8, 8, stone);
+      break;
+    case 3: // crater
+      p.ellipse(5, 6, 4.5, 3, rgb(0x3a3430)); p.ellipse(5, 6.5, 3, 1.8, rgb(0x22201e));
+      break;
+    case 4: // wreck
+      p.hline(1, 8, 7, rgb(0x6b4423)); p.hline(2, 7, 8, rgb(0x4a2e17)); p.vline(5, 3, 7, rgb(0x5e3c1f));
+      break;
+    case 5: case 9: // bones and skulls
+      p.line(2, 7, 7, 6, bone); p.set(2, 6, bone); p.set(7, 7, bone);
+      if (kind === 9 || v) { p.rect(5, 3, 3, 2, bone); p.set(5, 4, rgb(0x1a1210)); }
+      break;
+    case 11: // rubble
+      p.rect(2, 6, 2, 2, stone); p.rect(5, 7, 3, 2, stoneD); p.set(4, 8, stone); p.set(7, 5, stone);
+      break;
+    case 6: // flowers
+      for (const [x, y, c] of [[2, 6, 0xe0453a], [5, 5, 0xf2c94c], [7, 7, 0xd86fd0], [4, 8, 0xffffff]] as [number, number, number][]) { p.set(x, y, rgb(c)); p.set(x, y + 1, rgb(0x3f8a33)); }
+      break;
+  }
+  p.outline([20, 16, 12, 255]);
+  return p;
+}

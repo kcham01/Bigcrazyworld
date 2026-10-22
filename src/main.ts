@@ -18,6 +18,10 @@ else if (q.get('seed')) {
   const ci = q.get('city');
   if (ci !== null) { const c = sim.cities.filter(c => c.alive).sort((a, b) => b.pop - a.pop)[+ci]; if (c) { app.cam.x = c.x + 1; app.cam.y = c.y + 1; app.cam.zoom = +(q.get('zoom') || 16); } }
   else if (q.get('zoom')) { app.cam.zoom = +q.get('zoom')!; app.cam.x = +(q.get('x') || sim.world.w / 2); app.cam.y = +(q.get('y') || sim.world.h / 2); }
+  if (q.get('army')) {
+    // run on until an army is on the move, then look at it
+    for (let t = 0; t < 240 * 40; t++) { const a = sim.armies.find(a => (a.state === 'siege' || a.state === 'battle' || a.state === 'march') && a.members.length > 6); if (a) { app.cam.x = a.x; app.cam.y = a.y; app.cam.zoom = +(q.get('zoom') || 14); break; } sim.step(); }
+  }
   if (q.get('panel')) app.select({ kind: 'panel', id: q.get('panel')! });
   if (q.get('inspect') === 'city') { const c = sim.cities.filter(c => c.alive).sort((a, b) => b.pop - a.pop)[0]; if (c) app.select({ kind: 'city', id: c.id }); }
   if (q.get('inspect') === 'kingdom') { const k = sim.kingdoms.filter(k => k.alive).sort((a, b) => b.pop - a.pop)[0]; if (k) app.select({ kind: 'kingdom', id: k.id }); }

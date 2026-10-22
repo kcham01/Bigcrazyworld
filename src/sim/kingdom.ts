@@ -557,6 +557,19 @@ export function yearly(sim: Sim) {
       }
     }
     updateGov(sim, k);
+    // to the stars: a realm that knows how and has a launch pad sends a colony ship
+    if (k.techs.has('starship') && sim.rng.chance(0.08)) {
+      const cap = sim.cities[k.capital];
+      const pad = cap && cap.buildings.map(b => sim.buildings[b]).find(b => b.type === BT.LaunchPad && b.built >= 1 && b.alive);
+      if (pad) {
+        const U = sim.units;
+        let n = 0;
+        for (const u of cap.members.slice()) if (n < 40 && sim.ageYears(u) >= SPECIES[U.spec[u]].adult && !(U.flags[u] & UF.Ruler) && sim.rng.chance(0.3)) { U.flags[u] &= ~UF.Notable; U.release(u); sim.subs[U.sub[u]].pop--; n++; }
+        sim.fx.push({ kind: 'rocket', x: pad.x + pad.w / 2, y: pad.y + pad.h, t: 0, life: 120 });
+        k.prestige += 100;
+        sim.log('stars', `A great ship rose from ${cap.name} carrying ${n} colonists of ${k.name} to the stars. They will not be back.`, pad.x, pad.y, { k: k.id, imp: 2 });
+      }
+    }
     // gold buys things for the capital
     const cap = sim.cities[k.capital];
     if (cap && k.gold > 40) { const g = k.gold * 0.3; k.gold -= g; cap.stock[R.Gold] += g; }

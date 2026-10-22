@@ -85,6 +85,9 @@ export class App {
     this.target = null; this.undo = [];
     this.buildHud();
     this.setSpeed(1);
+    let seen = false;
+    try { seen = localStorage.getItem('bcw-tips') === '1'; localStorage.setItem('bcw-tips', '1'); } catch { /* private mode */ }
+    if (!seen) setTimeout(() => this.hint('Drag to look around, pinch to zoom. Pick a power below, then touch the world. Tap anyone to learn about them.'), 800);
   }
 
   newWorld(gen: GenOptions, start: StartOptions) {
@@ -312,7 +315,7 @@ export class App {
     if (!el) return;
     el.textContent = msg; el.style.opacity = '1';
     clearTimeout(this.hintTimer);
-    this.hintTimer = window.setTimeout(() => { el.style.opacity = '0'; }, 2600);
+    this.hintTimer = window.setTimeout(() => { el.style.opacity = "0"; }, Math.max(2600, msg.length * 55));
   }
 
   // ------------------------------------------------------------------ HUD

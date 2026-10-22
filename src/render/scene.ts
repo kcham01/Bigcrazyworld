@@ -11,7 +11,7 @@ import { Atlas } from './atlas';
 import { SpriteRenderer } from './sprites';
 import { Camera } from './camera';
 import { paintPerson, paintAnimal, type Gear } from './creatures';
-import { paintBuilding, paintTree } from './buildings';
+import { paintBuilding, paintTree, paintDeco } from './buildings';
 import { tornados } from '../sim/nature';
 import { hash2 } from '../sim/rng';
 
@@ -182,6 +182,12 @@ export class Scene {
       if (zoomedIn) for (let tx = x0; tx <= x1; tx++) {
         const i = ty * w.w + tx;
         const tr = w.tree[i];
+        if (!tr && w.deco[i] && w.deco[i] !== 10 && !w.bld[i]) {
+          const dk = w.deco[i], dv = (i * 2654435761 >>> 30) & 1;
+          const ds = this.atlas.get(`d${dk}${dv}`, () => ({ pix: paintDeco(dk, dv), ax: 5, ay: 9 }));
+          if (ds) sp.push(ds, tx + 0.5, ty + 0.95, PX, 0, 0, 0, 1, 1);
+          continue;
+        }
         if (!tr || w.bld[i]) continue;
         const v = (i * 2654435761 >>> 28) & 1;
         const snow = sim.winter > 0.5 && w.temp[i] < 4;
@@ -288,6 +294,13 @@ export class Scene {
         case 'flood': c.fillStyle = `rgba(60,120,200,${0.4 * (1 - t)})`; c.beginPath(); c.arc(X, Y, (f.size ?? 5) * z, 0, Math.PI * 2); c.fill(); break;
         case 'raise': c.fillStyle = `rgba(160,255,200,${0.8 * (1 - t)})`; for (let k = 0; k < 4; k++) c.fillRect(X + (k - 2) * z * 0.15, Y - t * z * 1.2 - k * 2, Math.max(1, z * 0.1), Math.max(1, z * 0.1)); break;
         case 'power': c.strokeStyle = hexA(f.color ?? 0xffffff, 1 - t); c.lineWidth = Math.max(1, z * 0.15); c.beginPath(); c.arc(X, Y, (f.size ?? 2) * z * (0.3 + t), 0, Math.PI * 2); c.stroke(); break;
+        case 'rocket': {
+          const up = t * t * view.h * z * 1.4;
+          c.fillStyle = '#f4f6f8'; c.fillRect(X - z * 0.15, Y - up - z * 1.2, z * 0.3, z * 1.2);
+          for (let k = 0; k < 6; k++) { c.fillStyle = k % 2 ? 'rgba(255,170,60,0.85)' : 'rgba(255,240,150,0.85)'; const s2 = z * (0.2 + Math.random() * 0.25); c.fillRect(X - s2 / 2 + (Math.random() - 0.5) * z * 0.3, Y - up + k * z * 0.12, s2, s2); }
+          c.fillStyle = `rgba(220,220,220,${0.5 * (1 - t)})`; c.beginPath(); c.arc(X, Y, z * (1 + t * 3), 0, Math.PI * 2); c.fill();
+          break;
+        }
         case 'text': c.fillStyle = hexA(f.color ?? 0xffffff, 1 - t); c.font = `bold ${Math.max(10, z * 0.45)}px Pixelify, monospace`; c.textAlign = 'center'; c.fillText(f.text || '', X, Y - t * z); c.textAlign = 'left'; break;
       }
     }
@@ -313,6 +326,23 @@ export class Scene {
         if (snow) c.fillRect(X, Y, 2, 2); else c.fillRect(X, Y, 1, 6);
       }
       if (sim.weather.storm > 0.5) { c.fillStyle = 'rgba(20,24,40,0.12)'; c.fillRect(0, 0, cam.vw, cam.vh); }
+    }
+    // armies on campaign: a banner over the general with the army's size
+    for (const a of sim.armies) {
+      if (a.state === 'disband' || a.state === 'home' || a.members.length < 3) continue;
+      const g = a.general;
+      if (g < 0 || !sim.units.alive[g]) continue;
+      const gx = sim.units.x[g], gy = sim.units.y[g];
+      if (!inView(gx, gy, 3)) continue;
+      const k = sim.kingdoms[a.kingdom];
+      const X = sx(gx), Y = sy(gy) - Math.max(16, z * 1.3);
+      c.strokeStyle = '#2b1d12'; c.lineWidth = 2; c.beginPath(); c.moveTo(X, sy(gy) - z * 0.5); c.lineTo(X, Y - 10); c.stroke();
+      const label = (a.state === 'siege' ? '⚔ ' : a.state === 'battle' ? '⚔ ' : '') + a.members.length;
+      c.font = `700 ${z > 10 ? 12 : 10}px Pixelify, monospace`;
+      const tw = c.measureText(label).width + 8;
+      c.fillStyle = hexA(k ? k.color : 0x888888, 1); c.fillRect(X + 1, Y - 18, tw, 14);
+      c.fillStyle = 'rgba(0,0,0,0.35)'; c.fillRect(X + 1, Y - 5, tw, 2);
+      c.fillStyle = '#fff'; c.textBaseline = 'middle'; c.fillText(label, X + 5, Y - 11);
     }
     // selection ring
     if (this.selected >= 0) {

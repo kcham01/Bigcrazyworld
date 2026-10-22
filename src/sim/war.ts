@@ -97,8 +97,9 @@ function peaceTalks(sim: Sim, w: War) {
   const years = (sim.tick - w.started) / TICKS_PER_YEAR;
   const s = w.score;           // >0 attacker winning
   const decisive = Math.abs(s) > 60;
-  const tired = att.weariness > 60 || def.weariness > 60 || years > 25;
-  if (!decisive && !tired && years < 6) return;
+  const tired = (att.weariness > 70 || def.weariness > 70) && years >= 3 || years > 25;
+  if (!decisive && !tired) return;
+  if (!decisive && years < 4) return;
   if (!decisive && !tired && !sim.rng.chance(0.08)) return;
   const winner = s > 15 ? att : s < -15 ? def : null;
   const loser = winner === att ? def : winner === def ? att : null;
@@ -575,7 +576,7 @@ export function battleDeath(sim: Sim, victimKingdom: number, killerKingdom: numb
   const victimAtt = w.attackers.includes(victimKingdom);
   w.deaths[victimAtt ? 0 : 1]++;
   w.score += victimAtt ? -0.6 : 0.6;
-  sim.kingdoms[victimKingdom].weariness += 0.3;
+  sim.kingdoms[victimKingdom].weariness += 0.15;
 }
 
 export function yearly(sim: Sim) {
