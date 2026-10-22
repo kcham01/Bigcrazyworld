@@ -30,10 +30,16 @@ const log = (...a) => { console.log(...a); results.steps.push(a.join(' ')); };
     d.addEventListener('pointerdown', e => { window.__calib = [e.clientX, e.clientY]; e.stopPropagation(); e.preventDefault(); }, true);
     document.body.appendChild(d);
   });
-  await device.shell(`input tap ${Math.round(W / 2)} ${Math.round(H / 2)}`);
-  await page.waitForFunction(() => !!window.__calib, null, { timeout: 10000 });
-  const [cx, cy] = await page.evaluate(() => window.__calib);
-  const dpr = await page.evaluate(() => { document.getElementById('__cal').remove(); return window.devicePixelRatio; });
+  let cal = null;
+  for (let k = 0; k < 6 && !cal; k++) {
+    await device.shell(`input tap ${Math.round(W / 2)} ${Math.round(H / 2)}`);
+    await sleep(1500);
+    cal = await page.evaluate(() => window.__calib || null);
+    if (!cal) await shot('calibration-' + k);
+  }
+  const dpr = await page.evaluate(() => { const d = document.getElementById('__cal'); if (d) d.remove(); return window.devicePixelRatio; });
+  if (!cal) { results.errors.push('calibration tap never arrived; assuming a full-screen page'); cal = [W / 2 / dpr, H / 2 / dpr]; }
+  const [cx, cy] = cal;
   const offX = W / 2 - cx * dpr, offY = H / 2 - cy * dpr;
   log(`screen ${W}x${H} dpr ${dpr}`);
   const tapAt = async (x, y) => device.shell(`input tap ${Math.round(offX + x * dpr)} ${Math.round(offY + y * dpr)}`);
