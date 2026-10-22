@@ -28,7 +28,7 @@ const save = () => fs.writeFileSync(path.join(__dirname, 'results.json'), JSON.s
   const W = +size[1], H = +size[2];
   // where page pixels land on screen (status bar offset)
   let off = null;
-  const calibrate = async () => {
+  const calibrate = async (retry = true) => {
     await page.evaluate(() => {
       const d = document.createElement('div');
       d.id = '__cal'; d.style.cssText = 'position:fixed;inset:0;z-index:99999;background:transparent';
@@ -38,6 +38,16 @@ const save = () => fs.writeFileSync(path.join(__dirname, 'results.json'), JSON.s
     let cal = null;
     for (let k = 0; k < 6 && !cal; k++) { await device.shell(`input tap ${Math.round(W / 2)} ${Math.round(H / 2)}`); await sleep(1200); cal = await page.evaluate(() => window.__calib); }
     const dpr = await page.evaluate(() => { document.getElementById('__cal')?.remove(); return window.devicePixelRatio; });
+    if (!cal && retry) {
+      // the emulator sometimes starts the app with a window that never draws or takes touches:
+      // start it again once before giving up
+      log('calibration tap never arrived: restarting the app');
+      await shot('00-not-drawing');
+      await device.shell(`am force-stop ${PKG}`); await sleep(1500);
+      await device.shell(`am start -W -n ${PKG}/.MainActivity --ez devtools true`); await sleep(8000);
+      await attach();
+      return calibrate(false);
+    }
     if (!cal) { results.errors.push('calibration tap never arrived'); cal = [W / 2 / dpr, H / 2 / dpr]; }
     off = { dpr, x: W / 2 - cal[0] * dpr, y: H / 2 - cal[1] * dpr };
     log(`screen ${W}x${H} dpr ${dpr} offset ${off.x.toFixed(0)},${off.y.toFixed(0)}`);
