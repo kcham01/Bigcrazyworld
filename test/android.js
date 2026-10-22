@@ -65,7 +65,19 @@ const save = () => fs.writeFileSync(path.join(__dirname, 'results.json'), JSON.s
   const back = async () => { await device.shell('input keyevent 4'); await sleep(900); };
   const sheets = () => page.locator('.scrim').count();
   const check = (name, ok, detail = '') => { results.checks[name] = ok ? 'pass' : 'FAIL ' + detail; log(ok ? 'pass' : 'FAIL', name, detail); };
-  const step = async (name, fn) => { try { await fn(); } catch (e) { results.errors.push(name + ': ' + e.message); log('FAILED', name, e.message); } };
+  const step = async (name, fn) => {
+    try { await fn(); } catch (e) {
+      results.errors.push(name + ': ' + e.message); log('FAILED', name, e.message);
+      if (/closed/.test(e.message)) {
+        // the app or its page went away: record why, then bring it back so the other steps still run
+        await shot('crash-' + name.replace(/\W+/g, '-'));
+        const why = (await device.shell(`dumpsys activity exit-info ${PKG}`)).toString().split('\n').slice(0, 40).join('\n');
+        results.exitInfo = (results.exitInfo || []).concat([why]); log('exit info', why.replace(/\s+/g, ' ').slice(0, 600));
+        await device.shell(`am start -W -n ${PKG}/.MainActivity --ez devtools true`); await sleep(6000);
+        await attach(); await calibrate();
+      }
+    }
+  };
 
   await sleep(4000);   // let the Wowhead icons load
   await shot('01-character');

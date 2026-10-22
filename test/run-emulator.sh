@@ -15,5 +15,6 @@ adb install -r out/TBCrushCalc.apk || exit 1
 adb shell am start -W -n $PKG/.MainActivity --ez devtools true
 sleep 10
 timeout 900 node test/android.js 2>&1 | tee test/play.log
-adb logcat -d -v time -s chromium:* AndroidRuntime:* > test/logcat.log
+adb logcat -d -v time | grep -iE "tbcrushcalc|chromium|webview|AndroidRuntime|FATAL|lowmemory|lmkd|renderer|am_kill|am_proc_died" > test/logcat.log
+adb shell dumpsys activity exit-info $PKG > test/exit-info.log
 exit 0

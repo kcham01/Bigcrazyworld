@@ -7,6 +7,8 @@ import android.content.pm.ApplicationInfo;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
+import android.util.Log;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -19,6 +21,7 @@ import androidx.webkit.WebViewAssetLoader;
 public class MainActivity extends Activity {
     private static final String HOST = "appassets.androidplatform.net";
     private WebView web;
+    private WebViewAssetLoader loader;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -27,19 +30,26 @@ public class MainActivity extends Activity {
         if (debuggable || getIntent().getBooleanExtra("devtools", false)) WebView.setWebContentsDebuggingEnabled(true);
 
         // served from https://appassets.androidplatform.net so saved characters (localStorage) work
-        final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
+        loader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
                 .build();
-        web = new WebView(this);
-        WebSettings s = web.getSettings();
+        web = makeWebView();
+        setContentView(web);
+        if (state != null) web.restoreState(state);
+        else web.loadUrl("https://" + HOST + "/assets/game/index.html");
+    }
+
+    private WebView makeWebView() {
+        WebView w = new WebView(this);
+        WebSettings s = w.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(false);
         s.setTextZoom(100);
         s.setSupportMultipleWindows(false);
-        web.setBackgroundColor(0xFF0B0907);
-        web.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        web.setWebViewClient(new WebViewClient() {
+        w.setBackgroundColor(0xFF0B0907);
+        w.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        w.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 return loader.shouldInterceptRequest(request.getUrl());
@@ -56,10 +66,22 @@ public class MainActivity extends Activity {
                 }
                 return true;
             }
+
+            @Override
+            public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                // The page's process died (Android ran low on memory, or it crashed). Without this the
+                // whole app would close; instead start a fresh page. Saved characters are in storage.
+                Log.w("TBCrushCalc", "renderer gone, crashed=" + detail.didCrash() + ": reloading");
+                if (view == web) {
+                    web = makeWebView();
+                    setContentView(web);
+                    web.loadUrl("https://" + HOST + "/assets/game/index.html");
+                }
+                view.destroy();
+                return true;
+            }
         });
-        setContentView(web);
-        if (state != null) web.restoreState(state);
-        else web.loadUrl("https://" + HOST + "/assets/game/index.html");
+        return w;
     }
 
     @Override
