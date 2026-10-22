@@ -1,0 +1,39 @@
+// Screenshots of the built app in headless Chromium at phone size: node tools/shot.mjs outDir
+// Goes through every screen and the main pop-ups, and prints any page errors.
+import { chromium } from '/opt/node-tools/node_modules/playwright/index.mjs';
+import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
+const root = path.resolve('build/web');
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.map': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg' };
+const server = http.createServer((req, res) => {
+  const u = decodeURIComponent(req.url.split('?')[0]);
+  const p = path.join(root, u === '/' ? 'index.html' : u);
+  fs.readFile(p, (e, d) => { if (e) { res.writeHead(404); res.end(); return; } res.writeHead(200, { 'content-type': types[path.extname(p)] || 'application/octet-stream' }); res.end(d); });
+}).listen(0);
+const port = server.address().port;
+const out = process.argv[2] || 'shots';
+fs.mkdirSync(out, { recursive: true });
+const b = await chromium.launch();
+const p = await b.newPage({ viewport: { width: 412, height: 915 }, deviceScaleFactor: 2 });
+const logs = [];
+p.on('console', m => { if (m.type() === 'error') logs.push(m.text()); }); p.on('pageerror', e => logs.push('ERROR: ' + e.message));
+await p.route(/zamimg|wowhead/, r => r.abort());
+await p.goto(`http://127.0.0.1:${port}/`);
+await p.waitForFunction('window.__ready');
+const shot = async n => { await p.waitForTimeout(250); await p.screenshot({ path: path.join(out, n + '.png') }); };
+const tab = async t => { await p.locator('#tabs .tab', { hasText: t }).click(); };
+await shot('01-character');
+await p.locator('.doll .slot.filled').first().click(); await shot('02-slot');
+await p.locator('.sheet .btn', { hasText: 'Change item' }).click(); await shot('03-picker');
+await p.evaluate(() => window.onBack()); await p.evaluate(() => window.onBack());
+await p.locator('#view').evaluate(v => v.scrollTop = 600); await shot('04-character-stats');
+await tab('Talents'); await shot('05-talents');
+await p.locator('.tal.maxed').first().click(); await shot('06-talent');
+await p.evaluate(() => window.onBack());
+await tab('Buffs'); await shot('07-buffs');
+await tab('Caps'); await shot('08-caps');
+await p.locator('#view').evaluate(v => v.scrollTop = 900); await shot('09-caps-2');
+await tab('Saved'); await shot('10-saved');
+await p.locator('.btn', { hasText: 'New character' }).click(); await shot('11-new');
+await p.evaluate(() => window.onBack());
+console.log(logs.length ? logs.join('\n') : 'no page errors');
+await b.close(); server.close();

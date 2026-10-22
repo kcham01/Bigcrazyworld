@@ -1,0 +1,52 @@
+name: Build and test TBCrushCalc
+# Builds the app, runs the engine tests, builds the APK, taps through it on an Android emulator,
+# and puts the APK, screenshots and logs on the "results" branch.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['README.md', 'LICENSE', 'docs/**']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: build
+  cancel-in-progress: false
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - run: bash ci/build.sh
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          KEYSTORE_B64: ${{ secrets.BCW_KEYSTORE }}
+          BCW_KEYSTORE_PASSWORD: ${{ secrets.BCW_KEYSTORE_PASSWORD }}
+      - run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          cd test && PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --no-audit --no-fund
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash test/run-emulator.sh
+      - if: always()
+        run: bash ci/publish.sh
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}

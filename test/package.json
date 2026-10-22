@@ -1,0 +1,6 @@
+{
+  "name": "tbcrushcalc-android-test",
+  "private": true,
+  "description": "Taps through TBCrushCalc on an Android emulator",
+  "dependencies": { "playwright": "1.56.0" }
+}
