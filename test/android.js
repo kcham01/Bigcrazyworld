@@ -16,13 +16,22 @@ const save = () => fs.writeFileSync(path.join(__dirname, 'results.json'), JSON.s
   const shot = async name => { await sleep(1200); fs.writeFileSync(path.join(SHOTS, name + '.png'), await device.shell('screencap -p')); log('shot', name); };
   let page;
   const attach = async () => {
-    const webview = await device.webView({ pkg: PKG }, { timeout: 120000 });
+    const webview = await device.webView({ pkg: PKG }, { timeout: 60000 });
     page = await webview.page();
     page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) results.errors.push('console: ' + m.text()); });
     page.on('pageerror', e => { results.errors.push('pageerror: ' + String(e)); console.log('  [page error]', String(e)); });
     await page.waitForFunction(() => window.__ready, null, { timeout: 120000 });
   };
-  try { await attach(); } catch (e) { await shot('no-webview'); results.errors.push('no webview: ' + e.message); save(); process.exit(1); }
+  // the emulator's Play services sometimes restart in the first minutes and take the app down with them
+  // (it uses their fonts provider): start the app again, up to three times
+  for (let attempt = 1; ; attempt++) {
+    try { await attach(); break; } catch (e) {
+      log(`no webview (attempt ${attempt}): ${e.message.split('\n')[0]}`);
+      if (attempt >= 3) { await shot('no-webview'); results.errors.push('no webview: ' + e.message); save(); process.exit(1); }
+      await device.shell(`am force-stop ${PKG}`); await sleep(5000);
+      await device.shell(`am start -W -n ${PKG}/.MainActivity --ez devtools true`); await sleep(8000);
+    }
+  }
 
   const size = (await device.shell('wm size')).toString().match(/(\d+)x(\d+)/);
   const W = +size[1], H = +size[2];
