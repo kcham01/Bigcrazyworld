@@ -85,7 +85,10 @@ const log = (...a) => { console.log(...a); results.steps.push(a.join(' ')); };
   await step('spawn dragon', async () => { await tapSel('.cats button', 'Beasts'); await page.locator('.power', { hasText: 'Dragon' }).first().scrollIntoViewIfNeeded(); await tapSel('.power', 'Dragon'); await tapAt(200, 300); await sleep(1200); await shot('10-dragon'); });
   await step('long run', async () => { await tapSel('.speed button', '25×'); await measure('speed25-late', 90000); await shot('11-late'); });
   await step('zoom out', async () => { await page.evaluate(() => { const a = window.app; a.cam.fit(a.sim.world.w, a.sim.world.h); }); await sleep(1200); await shot('12-world'); });
-  await step('save', async () => { await device.shell('input keyevent 4'); await sleep(800); await shot('13-menu'); await tapSel('button', 'Save world'); await sleep(4000); });
+  await step('save', async () => {
+    for (let k = 0; k < 4 && !(await page.locator('.menu').count()); k++) { await device.shell('input keyevent 4'); await sleep(900); }
+    await shot('13-menu'); await tapSel('button', 'Save world'); await sleep(4000);
+  });
   await step('restart and continue', async () => {
     await device.shell(`am force-stop ${PKG}`); await sleep(1500);
     await device.shell(`am start -W -n ${PKG}/.MainActivity --ez devtools true`); await sleep(6000);

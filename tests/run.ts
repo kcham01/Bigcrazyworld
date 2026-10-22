@@ -33,3 +33,17 @@ console.log('deaths:', JSON.stringify(Object.fromEntries(Object.entries(sim.deat
 const cities = sim.cities.filter(c => c.alive).sort((a, b) => b.pop - a.pop).slice(0, 6);
 for (const c of cities) console.log(`  ${c.name}: pop ${c.pop} housing ${c.housing} bld ${c.buildings.length} food ${c.stock[0].toFixed(0)} wood ${c.stock[1].toFixed(0)} stone ${c.stock[2].toFixed(0)} metal ${c.stock[3].toFixed(0)} gold ${c.stock[4].toFixed(0)} happy ${c.happy.toFixed(0)} fields ${c.fields.length} jobs ${Array.from(c.jobsHave).join(',')}`);
 console.log(`total ${(Date.now() - t0) / 1000}s, errors ${errors}`);
+
+// save, load, and keep going: the loaded world must carry on without errors
+import { serialize, deserialize } from '../src/sim/save';
+{
+  const t1 = Date.now();
+  const { data, meta } = serialize(sim, 'test');
+  const loaded = deserialize(data);
+  console.log(`save ${(data.length / 1e6).toFixed(1)} MB in ${Date.now() - t1} ms; loaded year ${loaded.year} (was ${sim.year}), ${loaded.units.count} creatures (was ${sim.units.count}), ${meta.kingdoms} realms`);
+  let ok = loaded.year === sim.year && loaded.units.count === sim.units.count;
+  try { for (let t = 0; t < TICKS_PER_YEAR * 5; t++) loaded.step(); } catch (e) { ok = false; console.error('ERROR after load', e); }
+  console.log(`after load +5 years: ${loaded.peopleCount} people, ${loaded.cities.filter(c => c.alive).length} towns. load test ${ok ? 'passed' : 'FAILED'}`);
+  if (!ok) errors++;
+  console.log(`errors ${errors}`);
+}

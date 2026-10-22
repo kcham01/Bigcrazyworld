@@ -89,6 +89,7 @@ export function deserialize(data: string): Sim {
   const U = new Units(Math.max(1024, o.units.hi + 64), world.w, world.h);
   const n = o.units.hi;
   for (const k of Object.keys(o.units)) {
+    if (k === 'cap' || k === 'gw' || k === 'gh' || k === 'cell') continue;   // these belong to the fresh arrays
     const v = dec(o.units[k]);
     const cur = (U as any)[k];
     if (ArrayBuffer.isView(cur)) (cur as any).set(v);

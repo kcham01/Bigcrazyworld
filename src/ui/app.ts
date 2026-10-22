@@ -58,10 +58,20 @@ export class App {
     (window as any).onBack = () => this.back();
   }
 
+  /** drawing resolution relative to the screen: lowered automatically on slow devices */
+  quality = 1; frameMs = 16; slowFor = 0; fastFor = 0;
   resize() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    this.canvas.width = Math.round(innerWidth * dpr); this.canvas.height = Math.round(innerHeight * dpr);
-    this.cam.vw = innerWidth; this.cam.vh = innerHeight; this.cam.dpr = dpr;
+    const s = dpr * this.quality;
+    this.canvas.width = Math.round(innerWidth * s); this.canvas.height = Math.round(innerHeight * s);
+    this.cam.vw = innerWidth; this.cam.vh = innerHeight; this.cam.dpr = Math.max(1, s);
+  }
+  adaptQuality(dt: number) {
+    this.frameMs = this.frameMs * 0.95 + dt * 1000 * 0.05;
+    if (this.frameMs > 30) { this.slowFor += dt; this.fastFor = 0; } else if (this.frameMs < 17) { this.fastFor += dt; this.slowFor = 0; } else { this.slowFor = 0; this.fastFor = 0; }
+    const minQ = 0.5 / Math.min(2, window.devicePixelRatio || 1);
+    if (this.slowFor > 2 && this.quality > minQ) { this.quality = Math.max(minQ, this.quality * 0.8); this.slowFor = 0; this.resize(); }
+    if (this.fastFor > 6 && this.quality < 1) { this.quality = Math.min(1, this.quality * 1.15); this.fastFor = 0; this.resize(); }
   }
 
   // ------------------------------------------------------------------ worlds
@@ -124,6 +134,7 @@ export class App {
     const dt = Math.min(0.1, (t - (this.last || t)) / 1000);
     this.last = t; this.time += dt;
     const sim = this.sim;
+    if (sim && dt > 0) this.adaptQuality(dt);
     if (sim) {
       this.acc += dt * TICKS_PER_SEC * SPEEDS[this.speed];
       const t0 = performance.now();
@@ -317,7 +328,7 @@ export class App {
     this.el.speed = speed;
     const ib = (name: string, label: string, fn: () => void) => { const b = h('button', { class: 'iconbtn', 'aria-label': label, title: label, onclick: fn }, h('img', { src: icon(name), alt: '' })); return b; };
     const undo = ib('lower', 'Undo', () => this.doUndo()); undo.innerHTML = '↶'; this.el.undo = undo;
-    const right = h('div', { class: 'panel' },
+    const right = h('div', { class: 'panel side' },
       undo,
       ib('book', 'Chronicle', () => this.select({ kind: 'panel', id: 'chronicle' })),
       ib('crown', 'Realms', () => this.select({ kind: 'panel', id: 'realms' })),
