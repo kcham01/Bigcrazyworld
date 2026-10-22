@@ -60,6 +60,7 @@ export class App {
   }
 
   /** drawing resolution relative to the screen: lowered automatically on slow devices */
+  perf = { simMs: 0, drawMs: 0 };
   quality = 1; frameMs = 16; slowFor = 0; fastFor = 0;
   resize() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -148,6 +149,7 @@ export class App {
         this.scene.snapshot(); sim.step(); this.acc -= 1; steps++;
         if (this.brushHeld && steps % 2 === 1) this.applyHeld();
       }
+      if (steps) this.perf.simMs = this.perf.simMs * 0.9 + (performance.now() - t0) / steps * 0.1;
       if (this.acc > 3) this.acc = 3;
       if (this.brushHeld && !steps && (t - this.lastApply > 70)) this.applyHeld();
       this.cam.update(dt);
@@ -155,10 +157,12 @@ export class App {
       this.cam.clamp(sim.world.w, sim.world.h);
       if (this.overlayMode !== 'none' && t - this.overlayAt > 1000) { this.overlayAt = t; this.computeOverlay(); }
       const alpha = Math.min(1, this.acc);
+      const td = performance.now();
       this.scene.draw(this.cam, SPEEDS[this.speed] ? alpha : 1, this.time, {
         borders: this.borders, tint: this.overlayMode === 'realms' ? 0.45 : 0, overlay: this.overlayMode !== 'none' && this.overlayMode !== 'realms' ? 0.7 : 0,
         labels: this.labels, cityBorders: this.overlayMode === 'realms',
       });
+      this.perf.drawMs = this.perf.drawMs * 0.9 + (performance.now() - td) * 0.1;
       this.hud(t);
     } else {
       // title backdrop

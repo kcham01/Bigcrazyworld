@@ -54,9 +54,9 @@ const log = (...a) => { console.log(...a); results.steps.push(a.join(' ')); };
   const measure = async (label, ms = 8000) => {
     const a = await page.evaluate(() => ({ f: window.__frames, t: window.app.sim ? window.app.sim.tick : 0, n: performance.now() }));
     await sleep(ms);
-    const b = await page.evaluate(() => ({ f: window.__frames, t: window.app.sim ? window.app.sim.tick : 0, n: performance.now(), units: window.app.sim ? window.app.sim.units.count : 0, year: window.app.sim ? window.app.sim.year : 0, people: window.app.sim ? window.app.sim.peopleCount : 0 }));
+    const b = await page.evaluate(() => ({ perf: window.app.perf, quality: window.app.quality, f: window.__frames, t: window.app.sim ? window.app.sim.tick : 0, n: performance.now(), units: window.app.sim ? window.app.sim.units.count : 0, year: window.app.sim ? window.app.sim.year : 0, people: window.app.sim ? window.app.sim.peopleCount : 0 }));
     const s = (b.n - a.n) / 1000;
-    const m = { label, fps: +((b.f - a.f) / s).toFixed(1), ticksPerSec: +((b.t - a.t) / s).toFixed(1), units: b.units, year: b.year, people: b.people };
+    const m = { label, simMsPerTick: +b.perf.simMs.toFixed(2), drawMs: +b.perf.drawMs.toFixed(1), quality: +b.quality.toFixed(2), fps: +((b.f - a.f) / s).toFixed(1), ticksPerSec: +((b.t - a.t) / s).toFixed(1), units: b.units, year: b.year, people: b.people };
     results[label] = m; log(JSON.stringify(m));
   };
   const step = async (name, fn) => { try { await fn(); } catch (e) { results.errors.push(name + ': ' + e.message); log('FAILED', name, e.message); } };
