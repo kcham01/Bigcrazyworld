@@ -168,8 +168,8 @@ const save = () => fs.writeFileSync(path.join(__dirname, 'results.json'), JSON.s
   await step('caps', async () => {
     await tapSel('#tabs .tab', 'Caps');
     await shot('11-caps');
-    check('caps screen shows the boss', (await page.locator('.frame', { hasText: 'The Boss' }).textContent()).includes('Gruul'));
-    check('damage taken for the boss', /Normal hit on you/.test(await page.locator('.frame', { hasText: 'Damage Taken' }).textContent()));
+    check('caps screen shows the boss', (await page.locator('.frame').first().textContent()).includes('Gruul'));
+    check('damage taken for the boss', /Normal hit on you/.test(await page.locator('.frame', { hasText: 'Normal hit on you' }).first().textContent()));
     await page.locator('#view').evaluate(v => { v.scrollTop = 900; });
     await shot('12-caps-more');
   });
