@@ -1,0 +1,6 @@
+{
+  "name": "bigcrazyworld-android-test",
+  "private": true,
+  "description": "Plays Big Crazy World on an Android emulator",
+  "dependencies": { "playwright": "1.56.0" }
+}

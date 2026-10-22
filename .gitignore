@@ -9,3 +9,12 @@ android/app/src/main/assets/game/
 test-out/
 *.jks
 *.keystore
+test/node_modules
+test/shots
+test/*.log
+test/results.json
+out
+results
+android/.gradle
+android/app/build
+android/build
