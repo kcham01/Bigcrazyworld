@@ -455,6 +455,21 @@ export function paintBuilding(type: string, style: number, era: number, w: numbe
   return { pix: crop(p, scaffold), ax: x0, ay: base - D };
 }
 
+/** winter: snow settles on the top of everything */
+export function snowOn(p: Pix): Pix {
+  for (let x = 0; x < p.w; x++) {
+    for (let y = 0; y < p.h; y++) {
+      const o = (y * p.w + x) * 4;
+      if (p.d[o + 3] < 90) continue;
+      // skip the dark outline pixel, snow the next two
+      const s1 = y + 1, s2 = y + 2;
+      for (const yy of [s1, s2]) { const q = (yy * p.w + x) * 4; if (yy < p.h && p.d[q + 3] >= 150) { const k = yy === s1 ? 1 : 0.9; p.d[q] = 238 * k; p.d[q + 1] = 243 * k; p.d[q + 2] = 248 * k; p.d[q + 3] = 255; } }
+      break;
+    }
+  }
+  return p;
+}
+
 function crop(p: Pix, scaffold: number): Pix {
   if (!scaffold) return p;
   // under construction: only the bottom part, with scaffolding poles

@@ -184,9 +184,11 @@ function needs(sim: Sim, u: number) {
   const U = sim.units, d = SPECIES[U.spec[u]];
   if (!(U.flags[u] & UF.Undead) && sim.laws.hunger && d.diet !== 'none') {
     U.hunger[u] += 20 * 100 / (TICKS_PER_YEAR * 1.5);
+    // very hungry with food in the stores: someone brings a meal
+    if (U.hunger[u] >= 90 && U.city[u] >= 0 && sim.cities[U.city[u]].stock[R.Food] >= 2) { sim.cities[U.city[u]].stock[R.Food] -= 2; U.hunger[u] = 0; }
     if (U.hunger[u] >= 100) {
       U.hunger[u] = 100;
-      sim.damage(u, U.maxHp[u] * 0.06, -1, 'starvation');
+      sim.damage(u, U.maxHp[u] * 0.035, -1, 'starvation');
       if (!U.alive[u]) return;
     }
     // drop what you're doing and eat

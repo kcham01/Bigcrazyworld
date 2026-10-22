@@ -42,7 +42,9 @@ export class Atlas {
     this.map.set(key, s);
     return s;
   }
+  onReset: (() => void) | null = null;
   reset() {
     this.map.clear(); this.x = 1; this.y = 1; this.rowH = 0;
+    if (this.onReset) this.onReset();
   }
 }

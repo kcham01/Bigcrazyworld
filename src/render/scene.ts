@@ -7,11 +7,11 @@ import { SPECIES } from '../sim/species';
 import { G, Gene } from '../sim/genetics';
 import { BUILDINGS, BT } from '../sim/entities';
 import { TerrainRenderer } from './terrain';
-import { Atlas } from './atlas';
+import { Atlas, type Sprite } from './atlas';
 import { SpriteRenderer } from './sprites';
 import { Camera } from './camera';
 import { paintPerson, paintAnimal, type Gear } from './creatures';
-import { paintBuilding, paintTree, paintDeco } from './buildings';
+import { paintBuilding, paintTree, paintDeco, snowOn } from './buildings';
 import { tornados } from '../sim/nature';
 import { hash2 } from '../sim/rng';
 
@@ -19,6 +19,8 @@ const PX = 1 / 8;           // world units per art pixel
 const ERA_GROUP = [0, 1, 1, 2, 2, 3, 4, 4, 4];
 const BUILD_KEYS = BUILDINGS.map(b => b.key);
 const NEUTRAL = 0x9a8a6a;
+const GEARS: Gear[] = ['civ', 'farm', 'wood', 'mine', 'build', 'fish', 'hunt', 'sold', 'arch', 'mage', 'priest', 'scholar', 'noble', 'ruler', 'merchant', 'thief', 'hero', 'child', 'guard', 'smith', 'herd', 'healer', 'sailor'];
+const BUILDS = ['human', 'elf', 'dwarf', 'orc', 'goblin', 'lizard', 'avian', 'undead', 'beast'];
 
 export interface ViewOpts { borders: boolean; tint: number; overlay: number; labels: boolean; cityBorders: boolean; }
 
@@ -38,6 +40,7 @@ export class Scene {
     this.gl = gl;
     this.terrain = new TerrainRenderer(gl);
     this.atlas = new Atlas(gl);
+    this.atlas.onReset = () => this.numCache.clear();
     this.sprites = new SpriteRenderer(gl);
     this.fxCanvas = fxCanvas;
     this.fx = fxCanvas.getContext('2d')!;
@@ -109,24 +112,37 @@ export class Scene {
     return 'civ';
   }
 
-  unitSprite(u: number, frame: number) {
+  /** sprites by a numeric key, so no strings are built per creature per frame */
+  numCache = new Map<number, Sprite>();
+  unitSprite(u: number, frame: number): Sprite | null {
     const U = this.sim.units, d = SPECIES[U.spec[u]];
-    if (d.sapient || d.key === 'zombie' && false) {
+    if (d.sapient) {
       const gear = this.gearOf(u);
-      const build = d.build || 'human';
-      const tier = gear === 'sold' || gear === 'arch' || gear === 'guard' || gear === 'hero' ? Math.max(U.weapon[u], U.armor[u]) : 0;
+      const gi = GEARS.indexOf(gear);
+      const soldier = gear === 'sold' || gear === 'arch' || gear === 'guard' || gear === 'hero';
+      const tier = soldier ? Math.max(U.weapon[u], U.armor[u]) : 0;
       const hair = U.uid[u] % 6;
       const mounted = U.mount[u] && (gear === 'sold' || gear === 'hero') ? U.mount[u] : 0;
-      const boat = (U.flags[u] & UF.OnBoat) !== 0;
-      const female = U.sex[u] === 1;
-      const key = `p${build}${female ? 1 : 0}${gear}${tier}${hair}${frame}${mounted}${boat ? 1 : 0}`;
-      return this.atlas.get(key, () => {
-        const pix = paintPerson({ build, female, frame, gear, tier, hair, mounted, boat });
+      const boat = (U.flags[u] & UF.OnBoat) !== 0 ? 1 : 0;
+      const female = U.sex[u] === 1 ? 1 : 0;
+      const bi = BUILDS.indexOf(d.build || 'human');
+      const nk = 1 + (((((((bi * 2 + female) * 32 + gi) * 16 + tier) * 8 + hair) * 4 + frame) * 4 + mounted) * 2 + boat);
+      const hit = this.numCache.get(nk);
+      if (hit) return hit;
+      const build = d.build || 'human';
+      const s = this.atlas.get(`p${build}${female}${gear}${tier}${hair}${frame}${mounted}${boat}`, () => {
+        const pix = paintPerson({ build, female: female === 1, frame, gear, tier, hair, mounted, boat: boat === 1 });
         return { pix, ax: pix.w / 2, ay: pix.h - 2 };
       });
+      if (s) this.numCache.set(nk, s);
+      return s;
     }
-    const key = 'a' + d.key + (frame & 1);
-    return this.atlas.get(key, () => { const pix = paintAnimal(d.key, frame & 1); return { pix, ax: pix.w / 2, ay: pix.h - 2 }; });
+    const nk = -(1 + d.id * 2 + (frame & 1));
+    const hit = this.numCache.get(nk);
+    if (hit) return hit;
+    const s = this.atlas.get('a' + d.key + (frame & 1), () => { const pix = paintAnimal(d.key, frame & 1); return { pix, ax: pix.w / 2, ay: pix.h - 2 }; });
+    if (s) this.numCache.set(nk, s);
+    return s;
   }
 
   // ------------------------------------------------------------------ drawing
@@ -191,7 +207,9 @@ export class Scene {
         if (!tr || w.bld[i]) continue;
         const v = (i * 2654435761 >>> 28) & 1;
         const snow = sim.winter > 0.5 && w.temp[i] < 4;
-        const s = this.atlas.get(`t${tr}${v}${snow ? 1 : 0}`, () => { const pix = paintTree(tr, v, snow); return { pix, ax: 6, ay: 15 }; });
+        const tk = 1e7 + tr * 4 + v * 2 + (snow ? 1 : 0);
+        let s = this.numCache.get(tk) || null;
+        if (!s) { s = this.atlas.get(`t${tr}${v}${snow ? 1 : 0}`, () => { const pix = paintTree(tr, v, snow); return { pix, ax: 6, ay: 15 }; }); if (s) this.numCache.set(tk, s); }
         if (!s) continue;
         const jx = (hash2(tx, ty, 5) - 0.5) * 0.3;
         sp.push(s, tx + 0.5 + jx, ty + 0.95, PX, 0, 0, 2 | (hash2(tx, ty, 9) < 0.5 ? 1 : 0), 1, 1, tx * 0.7 + ty);
@@ -206,7 +224,8 @@ export class Scene {
         const type = BUILD_KEYS[bd.type];
         if (bd.type === BT.Bridge) continue;
         const variant = bd.id % 3;
-        const s = this.atlas.get(`b${type}${bd.style}${era}${variant}${scaf}`, () => { const a = paintBuilding(type, bd.style, era, bd.w, bd.h, variant * 101 + 7, scaf); return { pix: a.pix, ax: a.ax, ay: a.ay }; });
+        const snowy = sim.winter > 0.5 && w.temp[bd.y * w.w + bd.x] < 4 ? 1 : 0;
+        const s = this.atlas.get(`b${type}${bd.style}${era}${variant}${scaf}${snowy}`, () => { const a = paintBuilding(type, bd.style, era, bd.w, bd.h, variant * 101 + 7, scaf); if (snowy) snowOn(a.pix); return { pix: a.pix, ax: a.ax, ay: a.ay }; });
         if (!s) continue;
         const hit = bd.hp < bd.maxHp * 0.5 ? 0.82 : 1;
         sp.push(s, bd.x, bd.y, PX, this.kingdomColor(k), 0, 0, 1, hit);
@@ -394,6 +413,7 @@ export class Scene {
     c.font = `600 ${z > 10 ? 13 : 11}px Pixelify, monospace`;
     for (const city of sim.cities) {
       if (!city.alive) continue;
+      if (z < 6 && !city.capital && city.pop < 25) continue;     // keep the zoomed-out map readable
       const X = sx(city.x + 1), Y = sy(city.y - 1.2);
       if (X < -80 || Y < -20 || X > view.w * z + 80 || Y > view.h * z + 30) continue;
       const k = sim.kingdoms[city.kingdom];

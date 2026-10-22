@@ -18,6 +18,7 @@ export const DEFAULT_START: StartOptions = { races: ['human', 'elf', 'dwarf', 'o
 export function newWorld(gen: GenOptions, start: StartOptions): Sim {
   const world = generateWorld(gen);
   const sim = new Sim(world, String(gen.seed));
+  sim.laws.maxUnits = Math.min(9000, Math.round((4000 + world.n / 50) / 500) * 500);
   populate(sim, start);
   return sim;
 }
