@@ -28,6 +28,7 @@ export function updateCreature(sim: Sim, u: number) {
     if (!U.alive[u]) return;
   }
   if (U.disease[u]) { people.diseaseTick(sim, u); if (!U.alive[u]) return; }
+  if (U.flags[u] & UF.Possessed) { people.possessedStep(sim, u); return; }
 
   switch (U.state[u]) {
     case St.Fight:

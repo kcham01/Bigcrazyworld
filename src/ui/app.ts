@@ -7,7 +7,7 @@ import { SPECIES, SPECIES_BY_KEY } from '../sim/species';
 import { UF } from '../sim/units';
 import { TICKS_PER_YEAR, SEASON_NAMES, BIOMES, ORE_COLORS } from '../sim/defs';
 import { ERAS } from '../sim/tech';
-import { POWERS, POWER_BY_ID, CATEGORIES, applyPower, unitAt, cityAt, type PowerState } from '../sim/powers';
+import { POWERS, POWER_BY_ID, CATEGORIES, applyPower, unitAt, cityAt, release, type PowerState } from '../sim/powers';
 import { serialize, deserialize } from '../sim/save';
 import { AGE_LIST } from '../sim/nature';
 import { Scene } from '../render/scene';
@@ -301,6 +301,7 @@ export class App {
       const msg = applyPower(sim, this.power, wx, wy, this.brushR, this.pstate);
       if (msg) this.hint(msg); else this.powerSound(this.power);
       if (this.power === 'patron') this.buildHud();
+      if (this.power === 'possess' && this.pstate.possessed !== undefined) { this.target = { kind: 'unit', uid: this.pstate.possessed }; this.scene.selected = sim.units.idx(this.pstate.possessed); this.scene.selectedUid = this.pstate.possessed; this.following = true; }
     }
   }
 
@@ -394,6 +395,7 @@ export class App {
 
   choosePower(id: string) {
     sfx('click');
+    if (this.sim) release(this.sim, this.pstate);
     this.power = id; this.pstate = { race: this.pstate.race };
     this.el.powers.querySelectorAll('.power').forEach(b => b.classList.toggle('on', (b as HTMLElement).dataset.id === id));
     const p = POWER_BY_ID[id];

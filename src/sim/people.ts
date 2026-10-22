@@ -545,7 +545,7 @@ function workStep(sim: Sim, u: number) {
   }
 }
 
-function possessedStep(sim: Sim, u: number) {
+export function possessedStep(sim: Sim, u: number) {
   const U = sim.units;
   if (U.state[u] === St.Fight) { if (!fightStep(sim, u)) U.state[u] = St.Possessed; return; }
   goTo(sim, u, U.tx[u], U.ty[u], 0.2);

@@ -28,6 +28,7 @@ export const CATEGORIES = [
 export const POWERS: Power[] = [
   P('inspect', 'Inspect', 'look', 'tap', 'eye', 'Tap anything to learn about it.'),
   P('follow', 'Follow', 'look', 'tap', 'follow', 'Tap a creature and the camera follows it.'),
+  P('possess', 'Possess', 'look', 'tap', 'hand', 'Take control of a creature: tap it, then tap where it should go, or tap someone to attack.'),
   P('favorite', 'Favourite', 'look', 'tap', 'star', 'Mark a creature as a favourite: you hear about its life, and it gets a grave when it dies.'),
   // land
   P('raise', 'Raise land', 'land', 'brush', 'raise', 'Lift the ground: sea becomes shore, hills become mountains.', 3),
@@ -165,7 +166,7 @@ export function cityAt(sim: Sim, x: number, y: number): number {
 export { unitAt };
 
 // ------------------------------------------------------------------ apply a power
-export interface PowerState { first?: number; race?: string; lastX?: number; lastY?: number; }
+export interface PowerState { first?: number; race?: string; lastX?: number; lastY?: number; possessed?: number; }
 
 /** returns a short message for the UI, or '' */
 export function applyPower(sim: Sim, id: string, x: number, y: number, r: number, st: PowerState): string {
@@ -389,6 +390,22 @@ export function applyPower(sim: Sim, id: string, x: number, y: number, r: number
       placeTribe(sim, key, 12, x, y);
       return '';
     }
+    case 'possess': {
+      const cur = st.possessed !== undefined ? U.idx(st.possessed) : -1;
+      if (cur >= 0) {
+        const t = unitAt(sim, x, y, 0.9, (j) => j !== cur);
+        if (t >= 0 && sim.rng.chance(1)) { U.targetU[cur] = t; U.targetUid[cur] = U.uid[t]; U.state[cur] = St.Fight; return ''; }
+        U.tx[cur] = x; U.ty[cur] = y; U.state[cur] = St.Possessed; U.dest[cur] = -1;
+        sim.fx.push({ kind: 'ring', x, y, t: 0, life: 10, color: 0xffe07a, size: 0.6 });
+        return '';
+      }
+      const u = unitAt(sim, x, y, 2);
+      if (u < 0) return 'Tap a creature to take control of it.';
+      U.flags[u] |= UF.Possessed; U.state[u] = St.Possessed; U.tx[u] = U.x[u]; U.ty[u] = U.y[u];
+      if (U.army[u] >= 0) { U.army[u] = -1; }
+      st.possessed = U.uid[u];
+      return `You control ${sim.unitName(u)}. Tap where to go, or tap someone to attack.`;
+    }
     case 'favorite': {
       const u = unitAt(sim, x, y, 2);
       if (u < 0) return 'Tap a creature.';
@@ -418,3 +435,11 @@ function line(x0: number, y0: number, x1: number, y1: number, fn: (x: number, y:
 }
 
 export { TECHS, TICKS_PER_YEAR, Job, St };
+
+/** let go of a possessed creature */
+export function release(sim: Sim, st: PowerState) {
+  if (st.possessed === undefined) return;
+  const u = sim.units.idx(st.possessed);
+  if (u >= 0) { sim.units.flags[u] &= ~UF.Possessed; sim.units.state[u] = St.Idle; }
+  st.possessed = undefined;
+}

@@ -60,6 +60,7 @@ const ART: Record<string, string[]> = {
   book: ['.kkkkkkkkk..', 'krrrrrrrrwk.', 'krrrrrrrrwk.', 'krryyyyrrwk.', 'krrrrrrrrwk.', 'krrrrrrrrwk.', 'krrrrrrrrwk.', 'kkkkkkkkkwk.', '.kwwwwwwwwk.', '..kkkkkkkk..'],
   shield: ['.kkkkkkkkk..', 'kbbbbbbbbbk.', 'kbbbyybbbbk.', 'kbbyyyybbbk.', 'kbbbyybbbbk.', '.kbbbbbbbk..', '..kbbbbbk...', '...kbbbk....', '....kkk.....'],
   tribe: [],
+  hand: ['....kk......', '...kssk.kk..', '...kssk.ksk.', '.kkkssk.ksk.', 'kssksskkssk.', 'kssssssssk..', '.ksssssssk..', '..kssssssk..', '...kssssk...', '....kkkk....'],
 };
 
 function toUrl(p: Pix, scale = 3): string {
