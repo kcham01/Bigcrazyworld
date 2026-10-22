@@ -61,7 +61,16 @@ const save = () => fs.writeFileSync(path.join(__dirname, 'results.json'), JSON.s
     off = { dpr, x: W / 2 - cal[0] * dpr, y: H / 2 - cal[1] * dpr };
     log(`screen ${W}x${H} dpr ${dpr} offset ${off.x.toFixed(0)},${off.y.toFixed(0)}`);
   };
-  await calibrate();
+  // the same Play services restart can come a few seconds later, while calibrating: start again then too
+  for (let attempt = 1; ; attempt++) {
+    try { await calibrate(); break; } catch (e) {
+      log(`app went away while starting (attempt ${attempt}): ${e.message.split('\n')[0]}`);
+      if (attempt >= 3) throw e;
+      await device.shell(`am force-stop ${PKG}`); await sleep(5000);
+      await device.shell(`am start -W -n ${PKG}/.MainActivity --ez devtools true`); await sleep(8000);
+      await attach();
+    }
+  }
   const tapAt = async (x, y) => device.shell(`input tap ${Math.round(off.x + x * off.dpr)} ${Math.round(off.y + y * off.dpr)}`);
   const tapSel = async (sel, text) => {
     const loc = text ? page.locator(sel, { hasText: text }).first() : page.locator(sel).first();
