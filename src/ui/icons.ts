@@ -139,3 +139,40 @@ export function icon(name: string): string {
 }
 
 export { M1, M2 };
+
+/** a realm's banner: field colour, a band or division in its second colour, and an emblem */
+const bannerCache = new Map<string, string>();
+export function banner(color: number, color2: number, b: number[]): string {
+  const key = `${color}-${color2}-${b.join(',')}`;
+  const hit = bannerCache.get(key);
+  if (hit) return hit;
+  const p = new Pix(12, 16);
+  const c1 = rgb(color), c2 = rgb(color2), k = rgb(0x1b1410);
+  const [div, emb] = [b[0] % 8, b[1] % 12];
+  for (let y = 0; y < 14; y++) for (let x = 0; x < 12; x++) {
+    let c = c1;
+    if (div === 1 && y >= 5 && y <= 8) c = c2;                 // band
+    if (div === 2 && x >= 5 && x <= 6) c = c2;                 // pale
+    if (div === 3 && x >= 6) c = c2;                            // per pale
+    if (div === 4 && y >= 7) c = c2;                            // per fess
+    if (div === 5 && (x + y) % 6 < 3) c = c2;                   // bends
+    if (div === 6 && (x === y || x === 11 - y)) c = c2;         // saltire
+    if (div === 7 && y < 4) c = c2;                             // chief
+    p.set(x, y, c);
+  }
+  // swallowtail bottom
+  p.set(5, 13, null as any); p.set(6, 13, null as any); p.set(5, 12, null as any); p.set(6, 12, null as any);
+  const E: string[][] = [
+    ['..ww..', '.wwww.', 'wwwwww', '.wwww.', '..ww..'], ['w....w', '.w..w.', '..ww..', '.w..w.', 'w....w'], ['..w...', '.www..', 'wwwww.', '..w...', '..w...'],
+    ['wwwwww', 'w.ww.w', 'wwwwww', '..ww..', '.wwww.'], ['.w..w.', 'wwwwww', '.wwww.', '..ww..', '......'], ['..ww..', '.w..w.', 'w....w', '.w..w.', '..ww..'],
+    ['w.w.w.', 'wwwww.', '.www..', '.www..', '......'], ['...ww.', '..ww..', '.ww...', '..ww..', '...ww.'], ['.wwww.', 'w.ww.w', 'wwwwww', '.w..w.', '......'],
+    ['..w...', '.w.w..', 'w...w.', '.w.w..', '..w...'], ['ww..ww', '.wwww.', '..ww..', '.wwww.', 'ww..ww'], ['.ww...', 'wwww..', 'wwwwww', '.wwww.', '..ww..'],
+  ];
+  const em = E[emb];
+  const ec = div === 0 ? c2 : rgb(0xf2c94c);
+  em.forEach((row, y) => [...row].forEach((ch, x) => { if (ch === 'w') p.set(3 + x, 4 + y, ec); }));
+  p.outline(k);
+  const url = toUrl(p, 3);
+  bannerCache.set(key, url);
+  return url;
+}

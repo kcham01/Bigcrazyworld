@@ -12,7 +12,7 @@ import { serialize, deserialize } from '../sim/save';
 import { AGE_LIST } from '../sim/nature';
 import { Scene } from '../render/scene';
 import { Camera } from '../render/camera';
-import { icon } from './icons';
+import { icon, banner } from './icons';
 import { h, esc, hex, fmt } from './dom';
 import * as V from './panels';
 import { saveWorld, loadWorld, listWorlds, deleteWorld } from './storage';
@@ -510,6 +510,8 @@ export class App {
     const head = h('header', {}, h('div', { style: { flex: '1', minWidth: '0' } }, h('h2', {}, v.title), h('div', { class: 'sub' }, v.sub)), h('button', { class: 'close', 'aria-label': 'Close', onclick: () => this.closeSheet() }, '✕'));
     const pu = this.target.kind === 'unit' ? this.sim!.units.idx(this.target.uid) : -1;
     if (pu >= 0) { const img = this.portrait(pu); if (img) head.prepend(img); }
+    const bk = this.target.kind === 'kingdom' ? this.sim!.kingdoms[this.target.id] : this.target.kind === 'city' ? this.sim!.kingdoms[this.sim!.cities[this.target.id].kingdom] : null;
+    if (bk) head.prepend(h('img', { class: 'portrait', src: banner(bk.color, bk.color2, bk.banner), alt: '', style: { width: '36px', height: '48px' } }));
     if (v.color !== undefined) head.style.boxShadow = `inset 4px 0 0 ${hex(v.color)}`;
     sheet.append(head);
     if (v.actions && v.actions.length) sheet.append(h('div', { class: 'actions', style: { padding: '0 12px' } }, ...v.actions.map(a => h('button', { class: a.on ? 'on' : '', onclick: () => this.action(a.id) }, a.label))));
@@ -561,7 +563,7 @@ export class App {
         { name: 'Lives', html: () => V.eventsHtml(sim, null, e => ['hero', 'ruler', 'death', 'religion', 'genius', 'fav'].includes(e.kind), 120) },
       ] };
       case 'realms': return { title: 'Realms', sub: `${sim.kingdoms.filter(k => k.alive).length} realms, ${sim.wars.filter(w => w.active).length} wars`, tabs: [
-        { name: 'Realms', html: () => '<div class="list">' + sim.kingdoms.filter(k => k.alive).sort((a, b) => b.pop - a.pop).map(k => `<button class="item" data-go="kingdom:${k.id}"><span class="swatch" style="background:${hex(k.color)}"></span><b>${esc(k.name)}</b><small>${fmt(k.pop)} · ${k.cities.length} towns · ${esc(ERAS[k.era])}</small></button>`).join('') + '</div>' },
+        { name: 'Realms', html: () => '<div class="list">' + sim.kingdoms.filter(k => k.alive).sort((a, b) => b.pop - a.pop).map(k => `<button class="item" data-go="kingdom:${k.id}"><img src="${banner(k.color, k.color2, k.banner)}" alt="" style="width:18px;height:24px;image-rendering:pixelated"><b>${esc(k.name)}</b><small>${fmt(k.pop)} · ${k.cities.length} town${k.cities.length === 1 ? "" : "s"} · ${esc(ERAS[k.era])}</small></button>`).join('') + '</div>' },
         { name: 'Wars', html: () => { const ws = sim.wars.slice().reverse().slice(0, 60); return ws.length ? '<div class="list">' + ws.map(w => `<button class="item" data-go="war:${w.id}"><b>${esc(w.name)}</b><small>${w.active ? 'ongoing' : 'over'}</small></button>`).join('') + '</div>' : '<p>The world has known no war. Yet.</p>'; } },
         { name: 'Faiths', html: () => { const rs = sim.religions.filter(r => r.alive).sort((a, b) => b.followers - a.followers); return rs.length ? '<div class="list">' + rs.map(r => `<button class="item" data-go="religion:${r.id}"><span class="swatch" style="background:${hex(r.color)}"></span><b>${esc(r.name)}</b><small>${fmt(r.followers)}</small></button>`).join('') + '</div>' : '<p>No one has founded a faith yet.</p>'; } },
         { name: 'Species', html: () => '<div class="list">' + sim.subs.filter(s => s.pop > 0).sort((a, b) => b.pop - a.pop).map(s => `<button class="item" data-go="species:${s.id}"><b>${esc(s.name)}</b><small>${fmt(s.pop)}${s.sapient ? ' · thinking' : ''}</small></button>`).join('') + '</div>' },
