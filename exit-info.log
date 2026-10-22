@@ -1,0 +1,12 @@
+ACTIVITY MANAGER PROCESS EXIT INFO (dumpsys activity exit-info)
+Last Timestamp of Persistence Into Persistent Storage: 1970-01-01 00:00:00.000
+  package: app.tbcrushcalc
+    Historical Process Exit for uid=10192
+        ApplicationExitInfo #0:
+          timestamp=2026-10-22 20:06:22.399 pid=5801 realUid=99000 packageUid=10192 definingUid=10134 user=0
+          process=com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0 reason=1 (EXIT_SELF) subreason=17 (ISOLATED NOT NEEDED) status=0
+          importance=300 pss=78MB rss=173MB description=isolated not needed state=empty trace=null
+        ApplicationExitInfo #1:
+          timestamp=2026-10-22 20:06:22.395 pid=5733 realUid=10192 packageUid=10192 definingUid=10192 user=0
+          process=app.tbcrushcalc reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=67MB rss=195MB description=stop app.tbcrushcalc due to from pid 7244 state=empty trace=null

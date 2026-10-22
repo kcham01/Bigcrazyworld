@@ -1,0 +1,44 @@
+screen 1080x2400 dpr 2.625 offset -0,128
+shot 01-character
+pass opens on an example character 
+shot 02-slot
+shot 03-picker
+shot 04-preview
+shot 05-equipped
+pass picked item is equipped Faceguard of Determination vs Faceguard of Determination
+pass Back closes the panel 
+shot 06-gems
+shot 07-gemmed
+pass gem goes in the socket Balanced Shadowsong Amethyst
+shot 08-talents
+shot 09-talent
+shot 10-buffs
+pass Holy Shield toggle changes the total 115.8%UNCRUSHABLE -> 80.5%21.9% SHORT
+shot 10b-food
+pass food picked from the list 
+pass flask closes the elixir rows 
+pass raid buff switches on 
+pass second tap: improved 
+pass third tap: off 
+shot 10c-buff-grid
+shot 10d-bosses
+shot 10e-gruul
+pass boss picked 
+shot 11-caps
+pass caps screen shows the boss 
+pass damage taken for the boss 
+shot 12-caps-more
+shot 13-saved
+shot 14-new
+shot 15-new-talents
+pass new character is open 
+pass Back goes to the Character screen 
+shot 16-druid
+shot 17-after-restart
+pass saved character survives a restart 
+pass four characters saved 
+screen 1080x2400 dpr 2.625 offset -0,128
+focus after link  mCurrentFocus=Window{f38043c u0 com.android.chrome/org.chromium.chrome.browser.firstrun.FirstRunActivity} mFocusedApp=ActivityRecord{946f7e3 u0 com.android.chrome/org.chromium.chrome.browser.firstrun
+shot 18-link
+pass app page stays on the app https://appassets.androidplatform.net/assets/game/index.html
+errors 0
