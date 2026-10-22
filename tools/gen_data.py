@@ -422,7 +422,7 @@ for r in rows:
     st = P.consumable_stats(use)
     dur = re.search(r'for (\d+) (sec|min|hour|hours|hrs?)\b', use)
     c = {'id': iid, 'n': t['name'], 'c': cat, 'q': int(t.get('quality', 1)), 'ic': t.get('icon', ''), 'st': st,
-         'tx': re.sub(r'\s*(?:Battle|Guardian) Elixir\.', '', use).strip(), 'rl': int(r[ix['RequiredLevel']] or 0)}
+         'tx': re.sub(r'\s*(?:Counts as both a Battle and Guardian elixir|(?:Battle|Guardian) Elixir)\.', '', use).strip(), 'rl': int(r[ix['RequiredLevel']] or 0)}
     if where:
         c['where'] = where
     if cat == 'scroll':

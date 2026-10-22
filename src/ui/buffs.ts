@@ -149,7 +149,7 @@ function consumablesFrame(p: Profile): HTMLElement {
       note: cat === 'potion' ? 'Potions last seconds, not hours: they only count in the "procs" view.' : null,
       onPick: k => {
         if (k == null) delete c[cat]; else (c as any)[cat] = k;
-        if (cat === 'flask' && k != null && (c.battle || c.guardian)) { delete c.battle; delete c.guardian; toast('Elixirs removed: a flask takes their place'); }
+        if (cat === 'flask' && k != null && (c.battle || c.guardian)) { delete c.battle; delete c.guardian; toast('Elixirs removed'); }
         commit();
       },
     }), disabled);
@@ -175,7 +175,7 @@ function consumablesFrame(p: Profile): HTMLElement {
     })));
   }
   box.appendChild(row('potion'));
-  box.appendChild(h('p', { class: 'note' }, 'A flask counts as both a battle and a guardian elixir, so the elixir slots close while one is on. Scrolls of different kinds stack.'));
+  box.appendChild(h('p', { class: 'note' }, 'Scrolls of different kinds stack.'));
   return box;
 }
 
