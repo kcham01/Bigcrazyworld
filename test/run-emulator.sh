@@ -9,7 +9,7 @@ adb wait-for-device
 until [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do sleep 2; done
 adb shell settings put global hide_error_dialogs 1
 adb shell settings put secure immersive_mode_confirmations confirmed
-sleep 15
+sleep 45   # let Google Play services settle: when it restarts it takes apps using its fonts provider down with it
 adb logcat -c
 adb install -r out/TBCrushCalc.apk || exit 1
 adb shell am start -W -n $PKG/.MainActivity --ez devtools true
