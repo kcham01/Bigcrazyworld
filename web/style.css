@@ -12,7 +12,7 @@
   --step: polygon(0 4px, 4px 4px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px));
 }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1426; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+#gl, #fx { position: fixed; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; }
 #fx { pointer-events: none; }
 #ui { position: fixed; inset: 0; pointer-events: none; font: 14px/1.45 Inter, system-ui, sans-serif; color: var(--vellum); }
 #ui * { box-sizing: border-box; }
@@ -67,6 +67,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; i
 .sheet header { display: flex; align-items: center; gap: 8px; padding: 10px 6px 8px 12px; border-bottom: 2px solid var(--slate); }
 .sheet header h2 { flex: 1; margin: 0; font: 700 19px/1.15 Pixelify, monospace; color: var(--vellum); overflow-wrap: anywhere; }
 .sheet header .sub { font-size: 12px; color: var(--dim); }
+.sheet header .portrait { flex: 0 0 auto; width: 48px; height: 48px; image-rendering: pixelated; }
 .sheet header img.portrait { width: 44px; height: 44px; image-rendering: pixelated; background: var(--slate); }
 .sheet .tabs { display: flex; gap: 2px; padding: 6px 8px 0; flex-wrap: wrap; }
 .sheet .tabs button { height: 28px; padding: 0 10px; background: transparent; color: var(--dim); font-size: 13px; }

@@ -83,6 +83,7 @@ export function crown(sim: Sim, k: Kingdom, u: number, how: 'founder' | 'heir' |
   if (old >= 0 && U.alive[old]) U.flags[old] &= ~UF.Ruler;
   const ch = people.makeNotable(sim, u);
   const title = rulerTitle(k, U.sex[u] === 1);
+  ch.titles = ch.titles.filter(t => t !== 'Heir');
   if (!ch.titles.includes(title)) ch.titles.unshift(title);
   ch.kingdom = k.id;
   ch.fame += 5;

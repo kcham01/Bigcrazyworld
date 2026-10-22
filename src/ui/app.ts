@@ -386,7 +386,7 @@ export class App {
     const p = POWER_BY_ID[id];
     if (p.r) { this.brushR = p.r; const inp = this.el.brush.querySelector('input') as HTMLInputElement; inp.value = String(p.r); this.el.brush.querySelector('span')!.textContent = String(p.r); }
     this.updateBrushVis();
-    this.hint(p.desc);
+    this.hint(p.kind === 'brush' || p.kind === 'drag' || p.kind === 'spawn' ? `${p.desc} Move the map with two fingers.` : p.desc);
     if (p.kind !== 'brush') this.scene.brush = null;
   }
   updateBrushVis() { const p = POWER_BY_ID[this.power]; this.el.brush.style.visibility = p && p.kind === 'brush' ? 'visible' : 'hidden'; }
@@ -422,6 +422,32 @@ export class App {
     else { this.scene.selected = -1; }
     if (t.kind !== 'unit') this.following = false;
     this.renderSheet(false);
+  }
+
+  /** a picture of a creature for the inspector, painted from its sprite */
+  portrait(u: number): HTMLElement | null {
+    const sc = this.scene, sim = this.sim!;
+    const c = document.createElement('canvas');
+    c.width = 48; c.height = 48; c.className = 'portrait';
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#2a3550'; g.fillRect(0, 0, 48, 48);
+    const d = SPECIES[sim.units.spec[u]];
+    // paint again on the CPU so marker colours can be resolved for this creature
+    import('../render/creatures').then(cr => {
+      const p = d.sapient ? cr.paintPerson({ build: d.build || 'human', female: sim.units.sex[u] === 1, frame: 0, gear: sc.gearOf(u), tier: Math.max(sim.units.weapon[u], sim.units.armor[u]), hair: sim.units.uid[u] % 6 }) : cr.paintAnimal(d.key, 0);
+      const t1 = sc.unitTint1(u), t2 = sc.unitTint2(u);
+      for (let i = 0; i < p.d.length; i += 4) {
+        const a = p.d[i + 3];
+        if (a === 204 || a === 153) { const t = a === 204 ? t1 : t2, k = p.d[i] / 160; p.d[i] = Math.min(255, ((t >> 16) & 255) * k); p.d[i + 1] = Math.min(255, ((t >> 8) & 255) * k); p.d[i + 2] = Math.min(255, (t & 255) * k); p.d[i + 3] = 255; }
+        else if (a === 102) p.d[i + 3] = 255; else if (a < 90) p.d[i + 3] = 0;
+      }
+      const tmp = document.createElement('canvas'); tmp.width = p.w; tmp.height = p.h;
+      tmp.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(p.d), p.w, p.h), 0, 0);
+      const k = Math.max(1, Math.floor(Math.min(44 / p.w, 44 / p.h)));
+      g.imageSmoothingEnabled = false;
+      g.drawImage(tmp, Math.round((48 - p.w * k) / 2), Math.round((48 - p.h * k) / 2), p.w * k, p.h * k);
+    });
+    return c;
   }
 
   closeSheet() { this.target = null; this.following = false; this.scene.selected = -1; this.el.sheet.style.display = 'none'; }
@@ -467,6 +493,8 @@ export class App {
     sheet.style.display = 'flex';
     sheet.innerHTML = '';
     const head = h('header', {}, h('div', { style: { flex: '1', minWidth: '0' } }, h('h2', {}, v.title), h('div', { class: 'sub' }, v.sub)), h('button', { class: 'close', 'aria-label': 'Close', onclick: () => this.closeSheet() }, '✕'));
+    const pu = this.target.kind === 'unit' ? this.sim!.units.idx(this.target.uid) : -1;
+    if (pu >= 0) { const img = this.portrait(pu); if (img) head.prepend(img); }
     if (v.color !== undefined) head.style.boxShadow = `inset 4px 0 0 ${hex(v.color)}`;
     sheet.append(head);
     if (v.actions && v.actions.length) sheet.append(h('div', { class: 'actions', style: { padding: '0 12px' } }, ...v.actions.map(a => h('button', { class: a.on ? 'on' : '', onclick: () => this.action(a.id) }, a.label))));

@@ -53,7 +53,7 @@ export function unitView(sim: Sim, u: number, following: boolean): View {
       ['Doing', esc(STATE_NAMES[U.state[u]])],
     ];
     if (d.sapient) {
-      rows.push(['Work', esc(JOB_NAMES[U.job[u]])]);
+      rows.push(['Work', U.flags[u] & UF.Ruler ? 'Rules the realm' : esc(JOB_NAMES[U.job[u]])]);
       rows.push(['Home', c >= 0 ? cLink(sim, c) : U.band[u] >= 0 ? 'a wandering tribe' : 'nowhere']);
       if (k >= 0) rows.push(['Realm', kLink(sim, k)]);
       if (U.culture[u] >= 0) rows.push(['People', esc(sim.cultures[U.culture[u]].name)]);
